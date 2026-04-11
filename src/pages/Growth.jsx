@@ -33,10 +33,16 @@ const CHART_TOOLTIP = ({ active, payload, label }) => {
 
 export default function Growth() {
   const navigate = useNavigate()
-  const { profile, byCategory } = useStore(s => ({
-    profile:    s.profile,
-    byCategory: s.byCategory,
-  }))
+  const profile = useStore(s => s.profile)
+  const expenses = useStore(s => s.expenses)
+
+  const byCategory = useMemo(() => {
+    const bc = {}
+    for (const e of expenses) {
+      bc[e.category] = (bc[e.category] || 0) + e.amount
+    }
+    return bc
+  }, [expenses])
 
   const totalSpent  = Object.values(byCategory).reduce((s, v) => s + v, 0)
   const income      = profile?.monthly_income || 0

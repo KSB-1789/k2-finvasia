@@ -1,7 +1,8 @@
 // src/App.jsx
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useStore } from './store'
+import { shallow } from 'zustand/shallow'
 import Shell from './components/layout/Shell'
 import Onboarding from './pages/Onboarding'
 import LogExpense  from './pages/LogExpense'
@@ -11,7 +12,8 @@ import Score       from './pages/Score'
 
 // Guard: redirect to /onboarding if not yet onboarded
 function RequireOnboarding({ children }) {
-  const { profile, loading } = useStore(s => ({ profile: s.profile, loading: s.loading }))
+  const loading = useStore(s => s.loading, shallow)
+  const profile = useStore(s => s.profile, shallow)
   const location = useLocation()
 
   if (loading) return <AppLoader />
@@ -20,6 +22,7 @@ function RequireOnboarding({ children }) {
 }
 
 function AppLoader() {
+  console.log('Showing loader')
   return (
     <div className="min-h-screen bg-[#0C0C10] flex items-center justify-center gap-3">
       <div className="w-6 h-6 rounded-md bg-[#22C55E] flex items-center justify-center">
@@ -58,10 +61,13 @@ function AppRoutes() {
 }
 
 export default function App() {
-  const init = useStore(s => s.init)
+  const initSelector = useCallback(s => s.init, [])
+  const init = useStore(initSelector, shallow)
 
   // Boot: resolve userId, pull data
   useEffect(() => { init() }, [])
+
+  console.log('App rendering')
 
   return (
     <BrowserRouter>

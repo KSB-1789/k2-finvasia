@@ -3,23 +3,29 @@
 // Real-time feedback after logging. Triggers nudge generation.
 // Recent expenses shown with delete capability.
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
 import { useStore } from '../store'
+import { shallow } from 'zustand/shallow'
 import { CATEGORIES, CATEGORY_MAP, inr, getActiveTriggers } from '../utils/finance'
 import { nudgeOnExpense, GEMINI_ENABLED } from '../lib/gemini'
 import { Button, Input, Card, useToast, Toast, Empty } from '../components/ui'
 
 export default function LogExpense() {
-  const { expenses, profile, byCategory, addExpense, deleteExpense, addNudge } = useStore(s => ({
-    expenses:      s.expenses,
-    profile:       s.profile,
-    byCategory:    s.byCategory,
-    addExpense:    s.addExpense,
-    deleteExpense: s.deleteExpense,
-    addNudge:      s.addNudge,
-  }))
+  const expenses = useStore(s => s.expenses)
+  const profile = useStore(s => s.profile)
+  const addExpense = useStore(s => s.addExpense)
+  const deleteExpense = useStore(s => s.deleteExpense)
+  const addNudge = useStore(s => s.addNudge)
+
+  const byCategory = useMemo(() => {
+    const bc = {}
+    for (const e of expenses) {
+      bc[e.category] = (bc[e.category] || 0) + e.amount
+    }
+    return bc
+  }, [expenses])
 
   const [category, setCategory] = useState(null)
   const [amount, setAmount]     = useState('')

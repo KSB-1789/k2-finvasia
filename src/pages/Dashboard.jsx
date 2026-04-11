@@ -2,7 +2,7 @@
 // Summary screen. Shows THIS MONTH's real data.
 // No data = empty state with actionable CTA. No fake numbers ever.
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { format, startOfMonth, parseISO } from 'date-fns'
@@ -25,13 +25,18 @@ const PIE_TOOLTIP = ({ active, payload }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { expenses, profile, nudges, byCategory, addNudge } = useStore(s => ({
-    expenses:   s.expenses,
-    profile:    s.profile,
-    nudges:     s.nudges,
-    byCategory: s.byCategory,
-    addNudge:   s.addNudge,
-  }))
+  const expenses = useStore(s => s.expenses)
+  const profile = useStore(s => s.profile)
+  const nudges = useStore(s => s.nudges)
+  const addNudge = useStore(s => s.addNudge)
+
+  const byCategory = useMemo(() => {
+    const bc = {}
+    for (const e of expenses) {
+      bc[e.category] = (bc[e.category] || 0) + e.amount
+    }
+    return bc
+  }, [expenses])
 
   const [loadingNudge, setLoadingNudge] = useState(false)
   const { toasts, toast } = useToast()

@@ -83,7 +83,8 @@ function ProfileSettings({ profile }) {
 
 export default function Score() {
   const navigate = useNavigate()
-  const { expenses, profile } = useStore(s => ({ expenses: s.expenses, profile: s.profile }))
+  const expenses = useStore(s => s.expenses)
+  const profile = useStore(s => s.profile)
 
   const score    = computeScore({ expenses, profile })
   const insights = scoreInsights({ expenses, profile })

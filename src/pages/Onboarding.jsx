@@ -4,10 +4,11 @@
 // No skipping income — it's required for score computation.
 // Optionally: demo mode pre-fills plausible data the user confirms.
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore, seedDemoData } from '../store'
+import { shallow } from 'zustand/shallow'
 import { Button, Input } from '../components/ui'
 
 const STEPS = ['name', 'income', 'goal']
@@ -23,8 +24,10 @@ const DEMO_PROFILE = {
 }
 
 export default function Onboarding() {
+  console.log('Onboarding rendering')
   const navigate = useNavigate()
-  const saveProfile = useStore(s => s.saveProfile)
+  const selector = useCallback(s => s.saveProfile, [])
+  const saveProfile = useStore(selector, shallow)
 
   const [step, setStep] = useState(0)
   const [form, setForm] = useState({ name: '', monthly_income: '', savings_goal: '' })
