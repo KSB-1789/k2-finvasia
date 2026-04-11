@@ -2,7 +2,7 @@
 // Responsive shell: sidebar on md+, bottom nav on mobile.
 // Clean hierarchy — no chrome clutter.
 
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useStore } from '../../store'
 import { SUPABASE_ENABLED } from '../../lib/supabase'
@@ -15,8 +15,17 @@ const NAV = [
 ]
 
 export default function Shell({ children }) {
+  const navigate = useNavigate()
   const profile = useStore(s => s.profile)
+  const logout = useStore(s => s.logout)
+  const authEmail = useStore(s => s.authEmail)
   const name = profile?.name
+
+  async function handleLogout() {
+    await logout()
+    if (SUPABASE_ENABLED) navigate('/onboarding', { replace: true })
+    else navigate('/onboarding', { replace: true })
+  }
 
   return (
     <div className="app-shell min-h-screen">
@@ -39,12 +48,22 @@ export default function Shell({ children }) {
 
           {/* Bottom info */}
           <div className="mt-auto space-y-3">
-            {name && (
+            {(name || authEmail) && (
               <div className="px-2 py-2 rounded-xl bg-[#131318] border border-[#23232F]">
                 <p className="text-xs text-[#55556A]">Logged in as</p>
-                <p className="text-sm text-[#F0F0F5] font-medium truncate">{name}</p>
+                {name && <p className="text-sm text-[#F0F0F5] font-medium truncate">{name}</p>}
+                {authEmail && (
+                  <p className="text-[10px] text-[#55556A] font-mono truncate mt-1" title={authEmail}>{authEmail}</p>
+                )}
               </div>
             )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#FB7185] border border-[#881337]/40 bg-[#4c0519]/20 hover:bg-[#881337]/25 transition-colors"
+            >
+              Log out
+            </button>
             <div className="flex items-center gap-1.5 px-2">
               <div className={`w-1.5 h-1.5 rounded-full ${SUPABASE_ENABLED ? 'bg-[#22C55E]' : 'bg-[#F59E0B]'}`} />
               <span className="text-[10px] text-[#55556A] font-mono">

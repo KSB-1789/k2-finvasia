@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { computeScore, scoreInsights } from '../store'
 import { levelFromScore, ALL_BADGES, inr } from '../utils/finance'
+import { SUPABASE_ENABLED } from '../lib/supabase'
 import { ScoreRing, Card, Button, Empty } from '../components/ui/index.jsx'
 
 const LEVELS = [
@@ -33,6 +34,42 @@ function NextLevelBar({ score }) {
         />
       </div>
     </div>
+  )
+}
+
+function SessionActions() {
+  const navigate = useNavigate()
+  const logout = useStore(s => s.logout)
+  const authEmail = useStore(s => s.authEmail)
+  const profile = useStore(s => s.profile)
+  const isDemo = profile?.is_demo === true || profile?.name === 'Demo User'
+
+  async function handleLogout() {
+    if (isDemo && !window.confirm('Leave the demo profile? You can sign in with your own email next.')) return
+    await logout()
+    navigate('/onboarding', { replace: true })
+  }
+
+  return (
+    <Card className="p-4 space-y-3">
+      <p className="text-xs text-[#8888A0] font-semibold uppercase tracking-wider">Account</p>
+      {SUPABASE_ENABLED && authEmail && (
+        <p className="text-xs text-[#8888A0]">
+          Signed in as <span className="font-mono text-[#F0F0F5] break-all">{authEmail}</span>
+        </p>
+      )}
+      {!SUPABASE_ENABLED && (
+        <p className="text-xs text-[#55556A]">Local storage mode — no cloud account.</p>
+      )}
+      {isDemo && (
+        <p className="text-xs text-[#A78BFA] border border-[#4C1D95]/40 rounded-xl px-3 py-2 bg-[#2e1065]/20">
+          You are on the <strong className="text-[#F0F0F5]">demo profile</strong>. Log out to create or sign in to a real account.
+        </p>
+      )}
+      <Button variant="danger" className="w-full sm:w-auto" size="sm" onClick={handleLogout}>
+        {isDemo ? 'Log out & use my account' : 'Log out'}
+      </Button>
+    </Card>
   )
 }
 
@@ -202,6 +239,8 @@ export default function Score() {
           </Card>
         </>
       )}
+
+      <SessionActions />
     </div>
   )
 }

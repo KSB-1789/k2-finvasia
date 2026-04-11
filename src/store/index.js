@@ -73,7 +73,8 @@ export const useStore = create(
   immer((set, get) => ({
     // ── State
     userId: null,
-    profile: null,      // { name, monthly_income, savings_goal, onboarded, badges, streak, last_log_date }
+    authEmail: null,    // Supabase session email (when configured)
+    profile: null,      // { name, monthly_income, savings_goal, onboarded, badges, streak, last_log_date, is_demo? }
     expenses: [],       // [{ id, amount, category, note, date, created_at }]
     nudges: [],         // [{ id, text, category, created_at, rating }]
     loading: true,
@@ -81,21 +82,73 @@ export const useStore = create(
 
     // ── Init: load userId, then pull profile + expenses
     async init() {
+      set(s => { s.loading = true })
       const uid = await ensureUserId()
-      set(s => { s.userId = uid })
+      set(s => {
+        s.userId = uid
+        s.authEmail = null
+      })
 
       if (SUPABASE_ENABLED && supabase) {
+        const { data: { session } } = await supabase.auth.getSession()
+        set(s => { s.authEmail = session?.user?.email ?? null })
+        if (!uid) {
+          set(s => {
+            s.profile = null
+            s.expenses = []
+            s.nudges = []
+            s.loading = false
+          })
+          return
+        }
         await get()._pullFromSupabase(uid)
       } else {
-        // localStorage-only mode
         const profile  = LS.get(`${uid}:profile`)
         const expenses = LS.get(`${uid}:expenses`, [])
         const nudges   = LS.get(`${uid}:nudges`, [])
-        set(s => { s.profile = profile; s.expenses = expenses; s.nudges = nudges; s.loading = false })
+        set(s => {
+          s.profile = profile
+          s.expenses = expenses
+          s.nudges = nudges
+          s.loading = false
+        })
       }
     },
 
+    async logout() {
+      const uid = get().userId
+      set(s => { s.loading = true })
+      if (uid) {
+        LS.del(`${uid}:profile`)
+        LS.del(`${uid}:expenses`)
+        LS.del(`${uid}:nudges`)
+      }
+      if (!SUPABASE_ENABLED) {
+        try { localStorage.removeItem('k2_uid') } catch { /* ignore */ }
+      }
+      if (SUPABASE_ENABLED && supabase) {
+        await supabase.auth.signOut()
+      }
+      set(s => {
+        s.userId = null
+        s.authEmail = null
+        s.profile = null
+        s.expenses = []
+        s.nudges = []
+      })
+      await get().init()
+    },
+
     async _pullFromSupabase(uid) {
+      if (!uid) {
+        set(s => {
+          s.profile = null
+          s.expenses = []
+          s.nudges = []
+          s.loading = false
+        })
+        return
+      }
       const [{ data: profileData }, { data: expenseData }, { data: nudgeData }] = await Promise.all([
         supabase.from('profile').select('*').eq('user_id', uid).maybeSingle(),
         supabase.from('expenses').select('*').eq('user_id', uid).order('date', { ascending: false }).limit(500),
@@ -116,12 +169,18 @@ export const useStore = create(
     // ── Profile ────────────────────────────────────────────────────────────
     async saveProfile(updates) {
       const uid = get().userId
+      if (!uid) throw new Error('Not signed in')
+
       const merged = { ...(get().profile || {}), ...updates, user_id: uid, updated_at: new Date().toISOString() }
       set(s => { s.profile = merged })
       LS.set(`${uid}:profile`, merged)
 
       if (SUPABASE_ENABLED && supabase) {
-        await supabase.from('profile').upsert(merged, { onConflict: 'user_id' })
+        const PROFILE_KEYS = ['user_id', 'name', 'monthly_income', 'savings_goal', 'onboarded', 'badges', 'streak', 'last_log_date', 'updated_at', 'is_demo']
+        const row = Object.fromEntries(
+          PROFILE_KEYS.filter(k => merged[k] !== undefined).map(k => [k, merged[k]])
+        )
+        await supabase.from('profile').upsert(row, { onConflict: 'user_id' })
       }
     },
 

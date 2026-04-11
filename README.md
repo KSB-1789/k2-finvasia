@@ -10,7 +10,7 @@
 v1 was a demo with static fake data baked into the UI. v2 is an actual product:
 
 - **Real onboarding** — income captured first, nothing works without it
-- **Per-user data isolation** — Supabase anon auth or localStorage UUID; never shared
+- **Per-user data isolation** — Supabase email/password sessions or localStorage UUID; never shared
 - **Zero fake defaults** — empty states everywhere, score only shows when real data exists
 - **Score derived from real spending** — formula uses actual income + category ratios
 - **AI nudges are context-injected** — Gemini receives your actual numbers; no generic advice
@@ -95,9 +95,13 @@ npm install
 ```
 
 ### 2. Configure
+
+Create a `.env` file in the project root (see variables below). You can copy the template with:
+
 ```bash
 cp .env.example .env
 ```
+
 Fill in `.env`:
 ```env
 VITE_GEMINI_API_KEY=     # https://aistudio.google.com/app/apikey (free)
@@ -117,11 +121,17 @@ npm run dev   # http://localhost:5173
 
 ## Supabase setup (optional but recommended for demos)
 
+### Auth (required when using cloud sync)
+
+1. In **Supabase Dashboard → Authentication → Providers**, enable **Email**.
+2. For local development, under **Authentication → Providers → Email**, you can turn **off** “Confirm email” so sign-up logs you in immediately. For production, leave confirmation on and use the email link before signing in.
+3. The app **does not** use anonymous sign-in anymore: **email + password** are collected as **step 1 of onboarding** (then name, income, goal). The `/login` URL only redirects to `/onboarding`.
+
+### Database
+
 Run this SQL in your Supabase project → SQL editor:
 
 ```sql
--- Enable anon sign-in (Dashboard → Auth → Providers → Anonymous → Enable)
-
 create table if not exists expenses (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users(id) on delete cascade,
@@ -138,11 +148,15 @@ create table if not exists profile (
   monthly_income numeric(10,2),
   savings_goal   numeric(10,2),
   onboarded      boolean default false,
+  is_demo        boolean default false,
   badges         text[] default '{}',
   streak         integer default 0,
   last_log_date  date,
   updated_at     timestamptz default now()
 );
+
+-- If you already created `profile` without `is_demo`, run:
+-- alter table profile add column if not exists is_demo boolean default false;
 
 create table if not exists nudges (
   id         uuid primary key default gen_random_uuid(),
@@ -193,6 +207,7 @@ src/
 │   ├── ui/index.jsx        ← Button, Card, Input, ScoreRing, Toast, Empty.
 │   └── layout/Shell.jsx    ← Desktop sidebar + mobile bottom nav.
 └── pages/
+    ├── Login.jsx           ← Email sign-in / sign-up when Supabase is configured.
     ├── Onboarding.jsx      ← 3-step: name → income → goal. Demo mode button.
     ├── LogExpense.jsx      ← Category grid → amount → log. Trigger display.
     ├── Dashboard.jsx       ← Month summary, pie, nudges, score preview.
@@ -202,6 +217,8 @@ src/
 
 ### Data flow
 ```
+User signs in (Supabase) or gets a local UUID
+  → init() loads profile + expenses for that user
 User logs expense
   → addExpense() in store
   → mirrored to localStorage immediately

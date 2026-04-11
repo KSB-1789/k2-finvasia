@@ -3,20 +3,24 @@ import { useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useStore } from './store'
 import { shallow } from 'zustand/shallow'
+import { SUPABASE_ENABLED } from './lib/supabase'
 import Shell from './components/layout/Shell'
+import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import LogExpense  from './pages/LogExpense'
 import Dashboard   from './pages/Dashboard'
 import Growth      from './pages/Growth'
 import Score       from './pages/Score'
 
-// Guard: redirect to /onboarding if not yet onboarded
+// Guard: Supabase requires a signed-in user, then onboarding complete
 function RequireOnboarding({ children }) {
   const loading = useStore(s => s.loading, shallow)
+  const userId = useStore(s => s.userId, shallow)
   const profile = useStore(s => s.profile, shallow)
   const location = useLocation()
 
   if (loading) return <AppLoader />
+  if (SUPABASE_ENABLED && !userId) return <Navigate to="/onboarding" state={{ from: location }} replace />
   if (!profile?.onboarded) return <Navigate to="/onboarding" state={{ from: location }} replace />
   return children
 }
@@ -41,6 +45,7 @@ function AppLoader() {
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/login" element={<Login />} />
       <Route path="/onboarding" element={<Onboarding />} />
 
       <Route path="/*" element={
