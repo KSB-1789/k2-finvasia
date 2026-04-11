@@ -2,7 +2,7 @@
 // Responsive shell: sidebar on md+, bottom nav on mobile.
 // Clean hierarchy — no chrome clutter.
 
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useStore } from '../../store'
 import { SUPABASE_ENABLED } from '../../lib/supabase'
@@ -19,43 +19,41 @@ export default function Shell({ children }) {
   const name = profile?.name
 
   return (
-    <div className="app-shell">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col bg-[#0C0C10] border-r border-[#23232F] px-4 py-6 sticky top-0 h-screen">
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 px-2 mb-8">
+    <div className="app-shell min-h-screen">
+      {/* Desktop: fixed sidebar stays in view while main scrolls (no reliance on sticky + flex quirks) */}
+      <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 z-30 w-64 bg-[#0C0C10] border-r border-[#23232F] px-4 py-6 overflow-y-auto">
+          {/* Brand */}
+          <div className="flex items-center gap-2.5 px-2 mb-8">
           <div className="w-7 h-7 rounded-lg bg-[#22C55E] flex items-center justify-center">
             <span className="font-mono font-black text-[#0C0C10] text-xs">K2</span>
           </div>
           <span className="font-semibold text-[#F0F0F5] text-sm">K2 Wealth</span>
         </div>
 
-        {/* Nav links */}
-        <nav className="flex-1 space-y-1">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <SideLink key={to} to={to} label={label} Icon={Icon} />
-          ))}
-        </nav>
+          {/* Nav links */}
+          <nav className="flex-1 space-y-1">
+            {NAV.map(({ to, label, icon: Icon }) => (
+              <SideLink key={to} to={to} label={label} Icon={Icon} />
+            ))}
+          </nav>
 
-        {/* Bottom info */}
-        <div className="mt-auto space-y-3">
-          {name && (
-            <div className="px-2 py-2 rounded-xl bg-[#131318] border border-[#23232F]">
-              <p className="text-xs text-[#55556A]">Logged in as</p>
-              <p className="text-sm text-[#F0F0F5] font-medium truncate">{name}</p>
+          {/* Bottom info */}
+          <div className="mt-auto space-y-3">
+            {name && (
+              <div className="px-2 py-2 rounded-xl bg-[#131318] border border-[#23232F]">
+                <p className="text-xs text-[#55556A]">Logged in as</p>
+                <p className="text-sm text-[#F0F0F5] font-medium truncate">{name}</p>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 px-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${SUPABASE_ENABLED ? 'bg-[#22C55E]' : 'bg-[#F59E0B]'}`} />
+              <span className="text-[10px] text-[#55556A] font-mono">
+                {SUPABASE_ENABLED ? 'Supabase sync' : 'Local storage'}
+              </span>
             </div>
-          )}
-          <div className="flex items-center gap-1.5 px-2">
-            <div className={`w-1.5 h-1.5 rounded-full ${SUPABASE_ENABLED ? 'bg-[#22C55E]' : 'bg-[#F59E0B]'}`} />
-            <span className="text-[10px] text-[#55556A] font-mono">
-              {SUPABASE_ENABLED ? 'Supabase sync' : 'Local storage'}
-            </span>
           </div>
-        </div>
-      </aside>
-
-      {/* Page content */}
-      <main className="min-h-screen pb-20 md:pb-0 overflow-x-hidden">
+        </aside>
+      <main className="min-h-screen w-full pb-20 md:pb-0 md:pl-64 overflow-x-hidden">
         {children}
       </main>
 

@@ -3,7 +3,7 @@
 
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Button } from '../components/ui'
+import { Button } from '../components/ui/index.jsx'
 
 const STATS = [
   { value: '₹2.3L', label: 'avg cashback per year' },

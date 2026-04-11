@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore, seedDemoData } from '../store'
 import { shallow } from 'zustand/shallow'
-import { Button, Input } from '../components/ui'
+import { Button, Input } from '../components/ui/index.jsx'
 
 const STEPS = ['name', 'income', 'goal']
 

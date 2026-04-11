@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Card, ScoreRing, SectionHeader, Pill } from '../components/ui'
+import { Card, ScoreRing, SectionHeader, Pill } from '../components/ui/index.jsx'
 import { TopBar } from '../components/Nav'
 import { calculateScore, getLevel, getScoreInsights } from '../hooks/useStore'
 import { BADGES } from '../utils/finance'

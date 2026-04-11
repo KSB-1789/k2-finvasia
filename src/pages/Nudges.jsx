@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Card, Button, SectionHeader, Pill, Toast } from '../components/ui'
+import { Card, Button, SectionHeader, Pill, Toast } from '../components/ui/index.jsx'
 import { TopBar } from '../components/Nav'
 import { generateNudges, generateTriggerNudge } from '../lib/gemini'
 import { getActiveTriggers, formatINR, sipFutureValue } from '../utils/finance'

@@ -169,6 +169,34 @@ export const useStore = create(
       if (SUPABASE_ENABLED && supabase) await supabase.from('expenses').delete().eq('id', id)
     },
 
+    async updateExpense(id, updates) {
+      const uid = get().userId
+      const payload = {
+        amount: updates.amount != null ? Number(updates.amount) : undefined,
+        category: updates.category,
+        note: updates.note === undefined ? undefined : (String(updates.note).trim() || null),
+        date: updates.date,
+      }
+      // Drop undefined so we do not overwrite columns accidentally
+      const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined))
+
+      set(s => {
+        const expenseIndex = s.expenses.findIndex(e => e.id === id)
+        if (expenseIndex >= 0) {
+          s.expenses[expenseIndex] = { ...s.expenses[expenseIndex], ...clean }
+        }
+      })
+      LS.set(`${uid}:expenses`, get().expenses)
+      if (SUPABASE_ENABLED && supabase) {
+        const { error } = await supabase
+          .from('expenses')
+          .update(clean)
+          .eq('id', id)
+          .eq('user_id', uid)
+        if (error) throw error
+      }
+    },
+
     async _updateStreak() {
       const profile = get().profile
       const today = format(new Date(), 'yyyy-MM-dd')

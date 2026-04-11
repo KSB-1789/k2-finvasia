@@ -10,7 +10,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useStore } from '../store'
 import { generateNudges, GEMINI_ENABLED } from '../lib/gemini'
 import { CATEGORY_MAP, inr, getActiveTriggers } from '../utils/finance'
-import { Card, Button, ScoreRing, Empty, useToast, Toast } from '../components/ui'
+import { Card, Button, ScoreRing, Empty, useToast, Toast } from '../components/ui/index.jsx'
 import { computeScore, scoreInsights } from '../store'
 
 const PIE_TOOLTIP = ({ active, payload }) => {

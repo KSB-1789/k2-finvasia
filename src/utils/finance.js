@@ -33,13 +33,20 @@ export function inr(amount, decimals = 0) {
   return `₹${n.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
 }
 
+/** FD lump-sum style FV (matches Growth.jsx headline fdVal for same horizon). */
+export function fdFV(monthly, years) {
+  if (years <= 0) return 0
+  const principal = monthly * 12 * years
+  return principal * (1 + (0.065 / 12) * ((years * 12) / 2))
+}
+
 /** Growth comparison data for chart */
 export function growthData(monthly, years) {
   return Array.from({ length: years + 1 }, (_, y) => ({
     year: y === 0 ? 'Now' : `${y}Y`,
     sip:      y === 0 ? 0 : Math.round(sipFV(monthly, y)),
     cashback: Math.round(monthly * 12 * y),
-    fd:       y === 0 ? 0 : Math.round(sipFV(monthly, y) * 0.62), // approximate FD at ~6.5%
+    fd:       y === 0 ? 0 : Math.round(fdFV(monthly, y)),
   }))
 }
 

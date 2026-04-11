@@ -66,11 +66,9 @@ input[type=number] { -moz-appearance: textfield; }
   border-radius: 8px;
 }
 
-/* Desktop layout */
-@media (min-width: 768px) {
-  .app-shell {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    min-height: 100vh;
-  }
+/* Shell layout lives in Shell.jsx (flex + sticky sidebar). Avoid grid here — it
+   targeted .app-shell but nested a single flex child, which collapsed the whole
+   app into the first grid column on desktop. */
+.app-shell {
+  min-height: 100vh;
 }

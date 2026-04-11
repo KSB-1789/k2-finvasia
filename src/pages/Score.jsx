@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { computeScore, scoreInsights } from '../store'
 import { levelFromScore, ALL_BADGES, inr } from '../utils/finance'
-import { ScoreRing, Card, Button, Empty } from '../components/ui'
+import { ScoreRing, Card, Button, Empty } from '../components/ui/index.jsx'
 
 const LEVELS = [
   { name: 'Spend Explorer', emoji: '🗺️', min: 0,  color: '#F43F5E' },

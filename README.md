@@ -31,6 +31,60 @@ v1 was a demo with static fake data baked into the UI. v2 is an actual product:
 
 ---
 
+## Recent Updates
+
+### Edit and Delete Functionality for Expenses
+
+Perfect! I've successfully added edit and delete functionality for logged expenses. Here's what I implemented:
+
+#### New Features Added:
+1. **Edit Expenses**
+   - Added an "Edit" button next to each expense in the recent list
+   - Clicking "Edit" pre-fills the logging form with the expense's current details
+   - The form shows "Update" instead of "Log" when editing
+   - Added a "Cancel" button to exit edit mode
+   - Updates are saved to both localStorage and Supabase (if enabled)
+
+2. **Delete Expenses**
+   - The existing delete functionality is preserved with confirmation
+   - Clicking "Del" shows confirmation buttons ("Del" and "No")
+
+3. **Store Updates**
+   - Added `updateExpense` function to the Zustand store
+   - Handles both localStorage and Supabase updates
+   - Maintains data consistency across storage methods
+
+4. **UI Improvements**
+   - Edit and Delete buttons are always visible (removed hover-only behavior for better UX)
+   - Clear visual distinction between Edit (green) and Delete (red) actions
+   - Form adapts to show editing state with appropriate buttons
+
+#### How to Use:
+- **Edit**: Click the green "Edit" button on any expense → modify details → click "Update"
+- **Delete**: Click the red "Del" button → confirm with "Del" or cancel with "No"
+
+The build completed successfully, so all functionality should work properly. You can now fully manage your expense history!
+
+### Growth Page Enhancements
+
+New features in the Growth/Investment Calculator:
+
+1. **Custom Amount Input**
+   - Type any custom investment amount instead of just using the slider
+   - Slider goes up to ₹50K by default (8× your estimated cashback)
+   - Custom input has no upper limit
+
+2. **Multi-Graph Comparison**
+   - Click **SIP** or **FD** to switch the chart (each vs flat cashback baseline)
+   - Flat cashback is shown as the baseline line only (not a separate chart mode)
+   - Graph updates in real-time based on selected type
+
+3. **Fixed Sidebar Layout**
+   - Desktop sidebar is `position: fixed` with main content `padding-left` so it stays visible while you scroll
+   - Mobile still uses the bottom nav only (no sidebar)
+
+---
+
 ## Setup
 
 ### 1. Clone & install
@@ -108,6 +162,8 @@ create policy "own rows" on profile   for all using (auth.uid() = user_id);
 create policy "own rows" on nudges    for all using (auth.uid() = user_id);
 ```
 
+Edits to expenses use `UPDATE` on `expenses` where `id` matches and `user_id = auth.uid()`. The `FOR ALL` policies above already allow `UPDATE` for the row owner. If you created narrower policies earlier, add or replace with the statements above so updates are not blocked.
+
 ---
 
 ## Netlify deploy
@@ -165,6 +221,28 @@ base = 40
 + min(streak, 10)        logging habit bonus
 + 5 if savings goal set
 = clamped [1, 100]
+```
+
+### Investment formulas (Growth page)
+
+**SIP (Systematic Investment Plan) @ 12% annual**
+```
+FV = P × [(1.01^n − 1) / 0.01] × 1.01
+   where P = monthly amount, n = months, 1% = monthly rate (12% annual)
+   monthly compounding with end-of-period payments
+```
+
+**FD (Fixed Deposit) @ 6.5% annual**
+```
+FV = P × 12 × years × (1 + (0.065/12) × (years×12/2))
+   where P = monthly amount
+   simplified average rate model for month-by-month deposits
+```
+
+**Cashback (Flat)**
+```
+FV = P × 12 × years
+   no compounding, direct accumulation
 ```
 
 ---

@@ -10,12 +10,13 @@ import { useStore } from '../store'
 import { shallow } from 'zustand/shallow'
 import { CATEGORIES, CATEGORY_MAP, inr, getActiveTriggers } from '../utils/finance'
 import { nudgeOnExpense, GEMINI_ENABLED } from '../lib/gemini'
-import { Button, Input, Card, useToast, Toast, Empty } from '../components/ui'
+import { Button, Input, Card, useToast, Toast, Empty } from '../components/ui/index.jsx'
 
 export default function LogExpense() {
   const expenses = useStore(s => s.expenses)
   const profile = useStore(s => s.profile)
   const addExpense = useStore(s => s.addExpense)
+  const updateExpense = useStore(s => s.updateExpense)
   const deleteExpense = useStore(s => s.deleteExpense)
   const addNudge = useStore(s => s.addNudge)
 
@@ -33,8 +34,17 @@ export default function LogExpense() {
   const [date, setDate]         = useState(format(new Date(), 'yyyy-MM-dd'))
   const [saving, setSaving]     = useState(false)
   const [lastAdded, setLastAdded] = useState(null)
+  const [editingExpense, setEditingExpense] = useState(null)
   const amountRef = useRef()
   const { toasts, toast } = useToast()
+
+  function handleEdit(expense) {
+    setCategory(expense.category)
+    setAmount(expense.amount.toString())
+    setNote(expense.note || '')
+    setDate(expense.date)
+    setEditingExpense(expense)
+  }
 
   // Auto-focus amount when category picked
   useEffect(() => {
@@ -48,22 +58,31 @@ export default function LogExpense() {
 
     setSaving(true)
     try {
-      const expense = await addExpense({ amount: amt, category, note, date })
-      setLastAdded(expense)
+      if (editingExpense) {
+        // Update existing expense
+        await updateExpense(editingExpense.id, { amount: amt, category, note, date })
+        toast(`₹${amt.toLocaleString('en-IN')} updated ✓`, 'success')
+        setEditingExpense(null)
+      } else {
+        const expense = await addExpense({ amount: amt, category, note, date })
+        setLastAdded(expense)
+        toast(`₹${amt.toLocaleString('en-IN')} logged ✓`, 'success')
+
+        // Generate contextual nudge (async, non-blocking)
+        if (GEMINI_ENABLED && profile?.monthly_income) {
+          nudgeOnExpense({
+            expense,
+            byCategory: { ...byCategory, [category]: (byCategory[category] || 0) + amt },
+            income: profile.monthly_income,
+          }).then(text => addNudge({ text, category })).catch(() => {})
+        }
+      }
       setAmount('')
       setNote('')
-      toast(`₹${amt.toLocaleString('en-IN')} logged ✓`, 'success')
-
-      // Generate contextual nudge (async, non-blocking)
-      if (GEMINI_ENABLED && profile?.monthly_income) {
-        nudgeOnExpense({
-          expense,
-          byCategory: { ...byCategory, [category]: (byCategory[category] || 0) + amt },
-          income: profile.monthly_income,
-        }).then(text => addNudge({ text, category })).catch(() => {})
-      }
+      setCategory(null)
     } catch (err) {
-      toast('Failed to save. Try again.', 'error')
+      console.error(err)
+      toast(err?.message ? `Save failed: ${err.message}` : 'Failed to save. Try again.', 'error')
     } finally {
       setSaving(false)
     }
@@ -157,14 +176,31 @@ export default function LogExpense() {
               />
             </div>
 
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={handleLog}
-              loading={saving}
-            >
-              Log ₹{amount || '0'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                size="lg"
+                onClick={handleLog}
+                loading={saving}
+              >
+                {editingExpense ? 'Update' : 'Log'} ₹{amount || '0'}
+              </Button>
+              {editingExpense && (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingExpense(null)
+                    setCategory(null)
+                    setAmount('')
+                    setNote('')
+                    setDate(format(new Date(), 'yyyy-MM-dd'))
+                  }}
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -210,7 +246,7 @@ export default function LogExpense() {
                   </p>
                   <div className="space-y-1.5">
                     {items.map(e => (
-                      <ExpenseRow key={e.id} expense={e} onDelete={() => deleteExpense(e.id)} />
+                      <ExpenseRow key={e.id} expense={e} onDelete={() => deleteExpense(e.id)} onEdit={() => handleEdit(e)} />
                     ))}
                   </div>
                 </div>
@@ -223,7 +259,7 @@ export default function LogExpense() {
   )
 }
 
-function ExpenseRow({ expense, onDelete }) {
+function ExpenseRow({ expense, onDelete, onEdit }) {
   const cat = CATEGORY_MAP[expense.category]
   const [confirming, setConfirming] = useState(false)
 
@@ -250,12 +286,14 @@ function ExpenseRow({ expense, onDelete }) {
           <button onClick={() => setConfirming(false)} className="text-[10px] text-[#8888A0] border border-[#23232F] rounded-lg px-2 py-1">No</button>
         </div>
       ) : (
-        <button
-          onClick={() => setConfirming(true)}
-          className="opacity-0 group-hover:opacity-100 text-[#55556A] hover:text-[#FB7185] transition-all text-xs flex-shrink-0"
-        >
-          ✕
-        </button>
+        <div className="flex gap-1 flex-shrink-0">
+          <button onClick={() => setConfirming(true)} className="text-[10px] text-[#FB7185] border border-[#881337] rounded-lg px-2 py-1">
+            Del
+          </button>
+          <button onClick={onEdit} className="text-[10px] text-[#22C55E] border border-[#16A34A] rounded-lg px-2 py-1">
+            Edit
+          </button>
+        </div>
       )}
     </motion.div>
   )
