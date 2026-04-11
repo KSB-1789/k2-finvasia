@@ -6,8 +6,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
-import { useStore } from '../store'
+import { useStore, seedDemoData } from '../store'
 import { shallow } from 'zustand/shallow'
+import { SUPABASE_ENABLED } from '../lib/supabase'
 import { CATEGORIES, CATEGORY_MAP, inr, getActiveTriggers } from '../utils/finance'
 import { nudgeOnExpense, GEMINI_ENABLED } from '../lib/gemini'
 import { Button, Input, Card, useToast, Toast, Empty } from '../components/ui/index.jsx'
@@ -35,8 +36,29 @@ export default function LogExpense() {
   const [saving, setSaving]     = useState(false)
   const [lastAdded, setLastAdded] = useState(null)
   const [editingExpense, setEditingExpense] = useState(null)
+  const [demoSeeding, setDemoSeeding] = useState(false)
   const amountRef = useRef()
   const { toasts, toast } = useToast()
+
+  const showSampleCta = SUPABASE_ENABLED || expenses.length === 0
+
+  async function handleLoadSampleExpenses() {
+    const warn =
+      expenses.length > 0
+        ? 'Replace all your logged expenses and nudges with the sample dataset? This updates Supabase too.'
+        : 'Load a realistic 30-day sample expense list (and demo nudges)?'
+    if (!window.confirm(warn)) return
+    setDemoSeeding(true)
+    try {
+      await seedDemoData(useStore)
+      toast('Sample data loaded — scroll down to browse.', 'success')
+    } catch (err) {
+      console.error(err)
+      toast(err?.message ? `Could not load sample: ${err.message}` : 'Could not load sample data.', 'error')
+    } finally {
+      setDemoSeeding(false)
+    }
+  }
 
   function handleEdit(expense) {
     setCategory(expense.category)
@@ -110,6 +132,26 @@ export default function LogExpense() {
           Tap a category, enter amount, done.
         </p>
       </div>
+
+      {showSampleCta && (
+        <Card className="p-4 mb-5 border border-[#4C1D95]/35 bg-[#2e1065]/15">
+          <p className="text-xs font-semibold text-[#A78BFA] uppercase tracking-wider mb-1">Sample data</p>
+          <p className="text-xs text-[#8888A0] mb-3">
+            {SUPABASE_ENABLED
+              ? 'Same demo pack as onboarding: realistic expenses and nudges for judges or exploration. Your profile (name, income) stays as-is.'
+              : 'Try a realistic 30-day expense list without typing each line — useful for a first look at charts and score.'}
+          </p>
+          <Button
+            type="button"
+            variant="violet"
+            size="sm"
+            loading={demoSeeding}
+            onClick={() => void handleLoadSampleExpenses()}
+          >
+            Load sample expenses
+          </Button>
+        </Card>
+      )}
 
       {/* Category grid */}
       <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-5">

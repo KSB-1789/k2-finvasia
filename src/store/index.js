@@ -337,9 +337,11 @@ export const useStore = create(
 )
 
 // ── Demo seeder (called from Onboarding demo mode) ────────────────────────────
+/** Replace expenses + nudges with the demo dataset (local + Supabase). Deletes existing rows in cloud first so nothing stale remains. */
 export async function seedDemoData(storeInstance) {
   const { buildDemoExpenses, DEMO_NUDGES } = await import('../lib/demoSeed.js')
   const uid = storeInstance.getState().userId
+  if (!uid) throw new Error('Not signed in')
 
   const expenses = buildDemoExpenses(uid)
   const nudges   = DEMO_NUDGES.map(n => ({ ...n, user_id: uid, id: crypto.randomUUID() }))
@@ -351,7 +353,17 @@ export async function seedDemoData(storeInstance) {
   lsSet(`${uid}:nudges`,   nudges)
 
   if (SUPABASE_ENABLED && supabase) {
-    await supabase.from('expenses').upsert(expenses, { onConflict: 'id' })
-    await supabase.from('nudges').upsert(nudges,   { onConflict: 'id' })
+    const { error: delE } = await supabase.from('expenses').delete().eq('user_id', uid)
+    if (delE) throw delE
+    const { error: delN } = await supabase.from('nudges').delete().eq('user_id', uid)
+    if (delN) throw delN
+    if (expenses.length) {
+      const { error: insE } = await supabase.from('expenses').insert(expenses)
+      if (insE) throw insE
+    }
+    if (nudges.length) {
+      const { error: insN } = await supabase.from('nudges').insert(nudges)
+      if (insN) throw insN
+    }
   }
 }

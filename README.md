@@ -24,7 +24,7 @@ v1 was a demo with static fake data baked into the UI. v2 is an actual product:
 | Screen | Core purpose |
 |--------|-------------|
 | **Onboarding** | Capture name, income, savings goal. Demo mode available. |
-| **Log** | Tap category → type amount → done. Auto-nudge on log. Triggers visible. |
+| **Log** | Tap category → type amount → done. Optional **Load sample expenses** (always when Supabase is on; also when the list is empty locally). |
 | **Dashboard** | Month summary, pie chart, AI nudges, score preview. Empty-state guarded. |
 | **Growth** | SIP vs FD vs cashback chart. Slider max auto-set from your cashback estimate. |
 | **Score** | Financial score 0–100, level journey, badges, profile settings. |
