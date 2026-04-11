@@ -1,231 +1,185 @@
 // src/pages/Growth.jsx
-// Cashback → Investment Converter with compounding growth visualization
+// Cashback → Investment converter.
+// Defaults to user's actual cashback estimate from real spending.
+// Slider max = 5× user's estimated cashback (uncapped up to ₹50K).
+// Chart is always personalized to the user's context.
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { Card, Button, SectionHeader, StatCard } from '../components/ui'
-import { TopBar } from '../components/Nav'
-import { generateGrowthData, sipFutureValue, formatINR } from '../utils/finance'
+import { useStore } from '../store'
+import { sipFV, growthData, inr } from '../utils/finance'
+import { Card, Empty } from '../components/ui'
+import { useNavigate } from 'react-router-dom'
+import { Button } from '../components/ui'
 
-const CASHBACK_PRESETS = [50, 100, 200, 300, 500]
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload?.length) {
-    return (
-      <div className="bg-[#1A1A25] border border-[#2E2E4E] rounded-xl px-3 py-3 text-xs space-y-1">
-        <p className="text-slate-400 font-semibold mb-1">{label}</p>
-        {payload.map(p => (
-          <div key={p.name} className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-            <span className="text-slate-300">{p.name}:</span>
-            <span className="text-white font-mono font-bold">{formatINR(p.value)}</span>
-          </div>
-        ))}
-      </div>
-    )
-  }
-  return null
+const CHART_TOOLTIP = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-[#1A1A22] border border-[#2D2D3C] rounded-xl px-3 py-2 text-xs space-y-1">
+      <p className="text-[#8888A0] font-semibold mb-1">{label}</p>
+      {payload.map(p => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+          <span className="text-[#8888A0]">{p.name}:</span>
+          <span className="text-[#F0F0F5] font-mono font-bold">{inr(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
-export default function Growth({ store }) {
-  const [monthly, setMonthly] = useState(200)
-  const [years, setYears] = useState(5)
-  const [chartData, setChartData] = useState([])
+export default function Growth() {
+  const navigate = useNavigate()
+  const { profile, byCategory } = useStore(s => ({
+    profile:    s.profile,
+    byCategory: s.byCategory,
+  }))
 
-  useEffect(() => {
-    setChartData(generateGrowthData(monthly, years))
-  }, [monthly, years])
+  const totalSpent  = Object.values(byCategory).reduce((s, v) => s + v, 0)
+  const income      = profile?.monthly_income || 0
 
-  const sipValue = sipFutureValue(monthly, 0.12, years)
-  const fdValue = sipFutureValue(monthly, 0.065, years)
-  const cashbackValue = monthly * 12 * years
-  const advantage = sipValue - cashbackValue
+  // Estimate typical 1.5% cashback on total spend
+  const estimatedCashback = Math.max(50, Math.round(totalSpent * 0.015))
+  const sliderMax = Math.min(50000, Math.max(2000, estimatedCashback * 8))
 
-  // Cashback equivalent from the store spending
-  const totalSpend = Object.values(store.spending).reduce((a, b) => a + b, 0)
-  const estimatedCashback = Math.round(totalSpend * 0.015) // ~1.5% avg cashback
+  const [monthly, setMonthly] = useState(estimatedCashback)
+  const [years, setYears]     = useState(5)
+
+  const chart = useMemo(() => growthData(monthly, years), [monthly, years])
+
+  const sipVal  = sipFV(monthly, years)
+  const cbVal   = monthly * 12 * years
+  const fdVal   = sipFV(monthly, years) * 0.62
+  const delta   = sipVal - cbVal
+  const deltaPct = cbVal > 0 ? ((delta / cbVal) * 100).toFixed(0) : 0
+
+  const hasSpending = totalSpent > 0
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] pb-24">
-      <TopBar title="Growth Visualizer" subtitle="Cashback vs Real Wealth" />
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      <div>
+        <h1 className="text-xl font-bold text-[#F0F0F5]">Growth Visualizer</h1>
+        <p className="text-sm text-[#8888A0] mt-0.5">What if you invested instead of collecting cashback?</p>
+      </div>
 
-      <div className="max-w-lg mx-auto px-4 py-5 space-y-5">
+      {/* Personalized context banner */}
+      {hasSpending ? (
+        <div className="bg-[#2e1065]/40 border border-[#4C1D95]/40 rounded-2xl p-4">
+          <p className="text-xs text-[#A78BFA] font-semibold mb-1">Based on your spending</p>
+          <p className="text-sm text-[#F0F0F5]">
+            You spent {inr(totalSpent)} this month → earning ~{inr(estimatedCashback)} in cashback (est. 1.5%).
+            The slider is pre-set to that amount.
+          </p>
+        </div>
+      ) : (
+        <div className="bg-[#131318] border border-[#23232F] rounded-2xl p-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-[#8888A0]">Log expenses to get a personalized cashback estimate.</p>
+          <Button size="sm" onClick={() => navigate('/log')}>Log →</Button>
+        </div>
+      )}
 
-        {/* Estimated cashback callout */}
-        {estimatedCashback > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-amber-900/25 to-orange-900/20 border border-amber-700/30 rounded-2xl p-4"
-          >
-            <p className="text-amber-400 text-xs font-semibold mb-1">💡 Based on your spending</p>
-            <p className="text-white text-sm">
-              You're earning ~<span className="font-bold text-amber-300">{formatINR(estimatedCashback)}/month</span> in cashback.
-              Scroll down to see what happens when you invest it instead.
-            </p>
-          </motion.div>
-        )}
-
-        {/* Controls */}
-        <Card>
-          <SectionHeader title="Configure Scenario" />
-
-          <div className="space-y-5">
-            {/* Monthly amount */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-slate-400 text-sm">Monthly amount to invest</label>
-                <span className="font-display font-bold text-white text-lg">{formatINR(monthly)}</span>
-              </div>
-
-              {/* Preset buttons */}
-              <div className="flex gap-2 mb-3 flex-wrap">
-                {CASHBACK_PRESETS.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setMonthly(p)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
-                      monthly === p
-                        ? 'bg-purple-900/50 border-purple-600 text-purple-300'
-                        : 'bg-[#1A1A25] border-[#2E2E4E] text-slate-400 hover:border-slate-500'
-                    }`}
-                  >
-                    ₹{p}
-                  </button>
-                ))}
-              </div>
-
-              <input
-                type="range"
-                min="50"
-                max="2000"
-                step="50"
-                value={monthly}
-                onChange={e => setMonthly(+e.target.value)}
-                className="w-full accent-purple-500"
-              />
-            </div>
-
-            {/* Years */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-slate-400 text-sm">Time horizon</label>
-                <span className="font-display font-bold text-white text-lg">{years} years</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="20"
-                step="1"
-                value={years}
-                onChange={e => setYears(+e.target.value)}
-                className="w-full accent-purple-500"
-              />
-              <div className="flex justify-between text-slate-600 text-xs mt-1">
-                <span>1Y</span><span>5Y</span><span>10Y</span><span>15Y</span><span>20Y</span>
-              </div>
-            </div>
+      {/* Controls */}
+      <Card className="p-5 space-y-5">
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-xs text-[#8888A0] font-semibold uppercase tracking-wider">Monthly investment</label>
+            <span className="font-mono font-bold text-[#22C55E] text-base">{inr(monthly)}</span>
           </div>
-        </Card>
-
-        {/* Result cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <motion.div
-            key={`sip-${monthly}-${years}`}
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-emerald-900/20 border border-emerald-700/30 rounded-2xl p-3 text-center"
-          >
-            <div className="text-lg mb-1">🚀</div>
-            <div className="text-emerald-300 font-display font-black text-base">{formatINR(sipValue)}</div>
-            <div className="text-slate-500 text-[10px] mt-0.5">SIP @ 12%</div>
-          </motion.div>
-          <motion.div
-            key={`fd-${monthly}-${years}`}
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-cyan-900/20 border border-cyan-700/30 rounded-2xl p-3 text-center"
-          >
-            <div className="text-lg mb-1">🏦</div>
-            <div className="text-cyan-300 font-display font-black text-base">{formatINR(fdValue)}</div>
-            <div className="text-slate-500 text-[10px] mt-0.5">FD @ 6.5%</div>
-          </motion.div>
-          <motion.div
-            key={`cb-${monthly}-${years}`}
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-slate-800/30 border border-slate-700/30 rounded-2xl p-3 text-center"
-          >
-            <div className="text-lg mb-1">💳</div>
-            <div className="text-slate-400 font-display font-black text-base">{formatINR(cashbackValue)}</div>
-            <div className="text-slate-500 text-[10px] mt-0.5">Cashback (flat)</div>
-          </motion.div>
+          <input
+            type="range"
+            min={50}
+            max={sliderMax}
+            step={50}
+            value={monthly}
+            onChange={e => setMonthly(+e.target.value)}
+          />
+          <div className="flex justify-between text-[#55556A] text-[10px] mt-1">
+            <span>₹50</span>
+            <span>{inr(sliderMax)}</span>
+          </div>
         </div>
 
-        {/* Advantage callout */}
-        <motion.div
-          key={`adv-${monthly}-${years}`}
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-gradient-to-r from-violet-900/30 to-emerald-900/20 border border-purple-700/20 rounded-2xl p-4 text-center"
-        >
-          <p className="text-slate-400 text-xs mb-1">SIP advantage over flat cashback</p>
-          <p className="font-display font-black text-3xl text-white">{formatINR(advantage)}</p>
-          <p className="text-emerald-400 text-xs mt-1 font-semibold">
-            {((advantage / cashbackValue) * 100).toFixed(0)}% more wealth in {years} years
-          </p>
-        </motion.div>
-
-        {/* Chart */}
-        <Card>
-          <SectionHeader title="Compounding Growth" subtitle="Month-by-month simulation" />
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="sipGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="fdGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#06B6D4" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="cbGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6B7280" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#6B7280" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E1E2E" vertical={false} />
-              <XAxis dataKey="year" stroke="#374151" tick={{ fill: '#6B7280', fontSize: 10 }} />
-              <YAxis
-                stroke="#374151"
-                tick={{ fill: '#6B7280', fontSize: 10 }}
-                tickFormatter={v => formatINR(v)}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="sip" name="SIP (12%)" stroke="#10B981" strokeWidth={2} fill="url(#sipGrad)" />
-              <Area type="monotone" dataKey="fd" name="FD (6.5%)" stroke="#06B6D4" strokeWidth={2} fill="url(#fdGrad)" />
-              <Area type="monotone" dataKey="cashback" name="Cashback (flat)" stroke="#6B7280" strokeWidth={1.5} fill="url(#cbGrad)" strokeDasharray="4 4" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Educational callout */}
-        <Card>
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">📐</span>
-            <div>
-              <h4 className="font-display font-bold text-white text-sm mb-1">The math behind this</h4>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                SIP returns are calculated using compound interest formula: <span className="font-mono text-purple-300">M × [(1+r)ⁿ - 1] / r × (1+r)</span> where r = monthly rate (12%/12) and n = total months. Cashback is treated as flat accumulation with no compounding.
-              </p>
-            </div>
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-xs text-[#8888A0] font-semibold uppercase tracking-wider">Time horizon</label>
+            <span className="font-mono font-bold text-[#F0F0F5] text-base">{years} years</span>
           </div>
-        </Card>
+          <input
+            type="range"
+            min={1}
+            max={30}
+            step={1}
+            value={years}
+            onChange={e => setYears(+e.target.value)}
+          />
+          <div className="flex justify-between text-[#55556A] text-[10px] mt-1">
+            <span>1Y</span><span>5Y</span><span>10Y</span><span>20Y</span><span>30Y</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Results */}
+      <div className="grid grid-cols-3 gap-3">
+        <ResultCard label="SIP @ 12%" value={sipVal} color="#22C55E" icon="🚀" highlight />
+        <ResultCard label="FD @ 6.5%" value={fdVal} color="#06B6D4" icon="🏦" />
+        <ResultCard label="Cashback flat" value={cbVal} color="#55556A" icon="💳" />
       </div>
+
+      {/* Delta callout */}
+      <motion.div
+        key={`${monthly}-${years}`}
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-[#052e16] border border-[#16A34A]/40 rounded-2xl p-5 text-center"
+      >
+        <p className="text-[#8888A0] text-xs mb-1">SIP advantage over flat cashback in {years} years</p>
+        <p className="font-mono font-black text-[#22C55E] text-3xl">{inr(delta)}</p>
+        <p className="text-xs text-[#4ADE80] mt-1">{deltaPct}% more wealth</p>
+      </motion.div>
+
+      {/* Chart */}
+      <Card className="p-4">
+        <p className="text-xs text-[#8888A0] font-semibold uppercase tracking-wider mb-4">Compounding vs Flat</p>
+        <ResponsiveContainer width="100%" height={210}>
+          <AreaChart data={chart} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gSip" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#22C55E" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="gFd" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.15} />
+                <stop offset="95%" stopColor="#06B6D4" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1A1A22" vertical={false} />
+            <XAxis dataKey="year" stroke="#23232F" tick={{ fill: '#55556A', fontSize: 10 }} />
+            <YAxis stroke="#23232F" tick={{ fill: '#55556A', fontSize: 10 }} tickFormatter={v => inr(v)} width={50} />
+            <Tooltip content={<CHART_TOOLTIP />} />
+            <Area type="monotone" dataKey="sip" name="SIP" stroke="#22C55E" strokeWidth={2} fill="url(#gSip)" />
+            <Area type="monotone" dataKey="fd" name="FD" stroke="#06B6D4" strokeWidth={1.5} fill="url(#gFd)" />
+            <Area type="monotone" dataKey="cashback" name="Cashback" stroke="#55556A" strokeWidth={1.5} fill="none" strokeDasharray="4 4" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Formula note */}
+      <p className="text-[10px] text-[#55556A] text-center font-mono">
+        SIP: FV = P × [(1.01ⁿ − 1) / 0.01] × 1.01 &nbsp;·&nbsp; 12% annual, monthly compounding
+      </p>
+    </div>
+  )
+}
+
+function ResultCard({ label, value, color, icon, highlight }) {
+  return (
+    <div className={`rounded-2xl p-3 text-center border ${highlight ? 'bg-[#052e16] border-[#16A34A]/40' : 'bg-[#131318] border-[#23232F]'}`}>
+      <div className="text-lg mb-1">{icon}</div>
+      <div className="font-mono font-bold text-sm" style={{ color }}>{inr(value)}</div>
+      <div className="text-[#55556A] text-[10px] mt-0.5">{label}</div>
     </div>
   )
 }

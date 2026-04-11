@@ -1,226 +1,190 @@
-# K2 Wealth — Financial Empowerment Dashboard
+# K2 Wealth v2 — Financial Empowerment for Gen-Z
 
-> **Team K2 · Finvasia Innovation Hackathon 2026 · Chitkara University, Punjab**
-> Problem Statement: PS2 — Cashback Dependency (Track 1: Payments & Digital Banking)
-
-Stop collecting cashback. Start building wealth.
-
-K2 Wealth is a Gen-Z focused financial empowerment app that replaces cashback with AI-powered nudges to micro-invest, save smartly, and grow wealth. Built with React + Vite, Tailwind CSS, Supabase, and Google Gemini AI.
+> **Team K2 · Finvasia Hackathon 2026 · Chitkara University**  
+> PS2 — Cashback Dependency · Track 1: Payments & Digital Banking
 
 ---
 
-## 🚀 Features
+## What changed in v2
 
-| Screen | What it does |
+v1 was a demo with static fake data baked into the UI. v2 is an actual product:
+
+- **Real onboarding** — income captured first, nothing works without it
+- **Per-user data isolation** — Supabase anon auth or localStorage UUID; never shared
+- **Zero fake defaults** — empty states everywhere, score only shows when real data exists
+- **Score derived from real spending** — formula uses actual income + category ratios
+- **AI nudges are context-injected** — Gemini receives your actual numbers; no generic advice
+- **Responsive layout** — desktop sidebar + mobile bottom nav, properly designed
+- **Demo mode done right** — seeds realistic data attributed to your userId, fully editable
+
+---
+
+## Features
+
+| Screen | Core purpose |
 |--------|-------------|
-| **Landing** | Team K2 branding, problem statement, onboarding hook |
-| **Dashboard** | Spending input by category, breakdown pie chart, smart triggers |
-| **Growth Visualizer** | Cashback vs SIP vs FD compounding chart, interactive scenario builder |
-| **Milestones & Score** | Financial growth score (0-100), level system, badges, streak |
-| **Nudge Feed** | AI-generated nudges from Kai (Gemini), trigger-based suggestions, rate/save |
+| **Onboarding** | Capture name, income, savings goal. Demo mode available. |
+| **Log** | Tap category → type amount → done. Auto-nudge on log. Triggers visible. |
+| **Dashboard** | Month summary, pie chart, AI nudges, score preview. Empty-state guarded. |
+| **Growth** | SIP vs FD vs cashback chart. Slider max auto-set from your cashback estimate. |
+| **Score** | Financial score 0–100, level journey, badges, profile settings. |
 
 ---
 
-## 🛠️ Tech Stack
+## Setup
 
-- **Frontend**: React 18 + Vite
-- **Styling**: Tailwind CSS (dark mode, gradients, Gen-Z aesthetic)
-- **Animations**: Framer Motion
-- **Charts**: Recharts
-- **AI**: Google Gemini 1.5 Flash (free tier)
-- **Database**: Supabase (free tier) — with localStorage fallback
-- **Fonts**: Syne (display) + DM Sans (body) + JetBrains Mono
-- **Deployment**: Netlify
-
----
-
-## ⚙️ Setup
-
-### 1. Clone & Install
-
+### 1. Clone & install
 ```bash
-git clone <your-repo-url>
-cd k2-finvasia
+git clone <repo>
+cd k2-wealth
 npm install
 ```
 
-### 2. Configure Environment Variables
-
+### 2. Configure
 ```bash
 cp .env.example .env
 ```
-
-Edit `.env` and fill in your keys:
-
+Fill in `.env`:
 ```env
-# Google Gemini API (free)
-# Get key at: https://aistudio.google.com/app/apikey
-VITE_GEMINI_API_KEY=your_gemini_api_key_here
-
-# Supabase (optional — app works without it using localStorage)
-# Get from: https://supabase.com → your project → Settings → API
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_key_here
+VITE_GEMINI_API_KEY=     # https://aistudio.google.com/app/apikey (free)
+VITE_SUPABASE_URL=       # optional
+VITE_SUPABASE_ANON_KEY=  # optional
 ```
 
-> **Note**: The app works fully without Supabase — all data falls back to localStorage. Gemini API key is required for live AI nudges; without it, demo nudges are shown.
+> App works fully without Supabase — localStorage mode is the fallback.  
+> App works without Gemini — fallback nudges use your real numbers, just without LLM phrasing.
 
-### 3. Run Locally
-
+### 3. Run
 ```bash
-npm run dev
+npm run dev   # http://localhost:5173
 ```
-
-Open [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## 🗄️ Supabase Setup (Optional)
+## Supabase setup (optional but recommended for demos)
 
-If you want persistent cloud storage:
-
-1. Create a free project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor** and run this:
+Run this SQL in your Supabase project → SQL editor:
 
 ```sql
-create table if not exists spending_entries (
-  id uuid primary key default gen_random_uuid(),
-  user_id text not null default 'default',
-  month text not null,
-  category text not null,
-  amount numeric not null,
+-- Enable anon sign-in (Dashboard → Auth → Providers → Anonymous → Enable)
+
+create table if not exists expenses (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  amount      numeric(10,2) not null check (amount > 0),
+  category    text not null,
+  note        text,
+  date        date not null default current_date,
+  created_at  timestamptz default now()
+);
+
+create table if not exists profile (
+  user_id        uuid primary key references auth.users(id) on delete cascade,
+  name           text,
+  monthly_income numeric(10,2),
+  savings_goal   numeric(10,2),
+  onboarded      boolean default false,
+  badges         text[] default '{}',
+  streak         integer default 0,
+  last_log_date  date,
+  updated_at     timestamptz default now()
+);
+
+create table if not exists nudges (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  text       text not null,
+  category   text,
+  rating     text,
   created_at timestamptz default now()
 );
 
-create table if not exists user_profile (
-  user_id text primary key default 'default',
-  score integer default 0,
-  level text default 'Saver Rookie',
-  streak integer default 0,
-  badges jsonb default '[]',
-  last_active date,
-  created_at timestamptz default now()
-);
+alter table expenses enable row level security;
+alter table profile   enable row level security;
+alter table nudges    enable row level security;
 
-create table if not exists nudge_history (
-  id uuid primary key default gen_random_uuid(),
-  user_id text not null default 'default',
-  nudge text not null,
-  category text,
-  created_at timestamptz default now()
-);
+create policy "own rows" on expenses for all using (auth.uid() = user_id);
+create policy "own rows" on profile   for all using (auth.uid() = user_id);
+create policy "own rows" on nudges    for all using (auth.uid() = user_id);
 ```
-
-3. Add your project URL and anon key to `.env`
 
 ---
 
-## 🌐 Deploy to Netlify
-
-### Option A: Netlify CLI
+## Netlify deploy
 
 ```bash
-npm install -g netlify-cli
-npm run build
-netlify deploy --prod --dir=dist
+# Push to GitHub, then:
+# Netlify → New Site → Import from GitHub
+# Build: npm run build  |  Publish: dist
+# Add env vars in Site Settings → Environment Variables
 ```
 
-### Option B: Netlify Dashboard
-
-1. Push your code to GitHub
-2. Go to [netlify.com](https://netlify.com) → New Site → Import from Git
-3. Build settings:
-   - **Build command**: `npm run build`
-   - **Publish directory**: `dist`
-4. Add environment variables in **Site Settings → Environment Variables**:
-   - `VITE_GEMINI_API_KEY`
-   - `VITE_SUPABASE_URL` (optional)
-   - `VITE_SUPABASE_ANON_KEY` (optional)
-5. Deploy!
-
-The `netlify.toml` in the root handles SPA routing automatically.
+`netlify.toml` is already configured for SPA routing.
 
 ---
 
-## 📁 File Structure
+## Architecture
 
 ```
-k2-finvasia/
-├── public/
-│   └── favicon.svg
-├── src/
-│   ├── components/
-│   │   ├── Nav.jsx          # Bottom nav + top bar
-│   │   └── ui.jsx           # Shared UI primitives (Card, Button, ScoreRing, etc.)
-│   ├── hooks/
-│   │   └── useStore.js      # Unified data store (Supabase + localStorage)
-│   ├── lib/
-│   │   ├── gemini.js        # Gemini API integration (Kai nudge engine)
-│   │   └── supabase.js      # Supabase client with fallback detection
-│   ├── pages/
-│   │   ├── Landing.jsx      # Onboarding/hero page
-│   │   ├── Dashboard.jsx    # Spending input + analysis
-│   │   ├── Growth.jsx       # Cashback → investment visualizer
-│   │   ├── Milestones.jsx   # Score + gamified progress
-│   │   └── Nudges.jsx       # AI nudge feed
-│   ├── utils/
-│   │   └── finance.js       # SIP math, triggers, badges, formatters
-│   ├── App.jsx              # Root component + routing
-│   ├── main.jsx             # React entry point
-│   └── index.css            # Global styles + Tailwind
-├── .env.example             # Environment variable template
-├── netlify.toml             # Netlify deployment config
-├── tailwind.config.js
-├── vite.config.js
-└── package.json
+src/
+├── store/index.js          ← Zustand + Immer. Single truth. Supabase + LS sync.
+├── lib/
+│   ├── supabase.js         ← Anon auth client. Per-user isolation.
+│   ├── gemini.js           ← Context-injected prompts. Real number injection.
+│   └── demoSeed.js         ← Realistic 30-day dataset for demo mode.
+├── utils/finance.js        ← SIP formula, categories, triggers, badges, score.
+├── components/
+│   ├── ui/index.jsx        ← Button, Card, Input, ScoreRing, Toast, Empty.
+│   └── layout/Shell.jsx    ← Desktop sidebar + mobile bottom nav.
+└── pages/
+    ├── Onboarding.jsx      ← 3-step: name → income → goal. Demo mode button.
+    ├── LogExpense.jsx      ← Category grid → amount → log. Trigger display.
+    ├── Dashboard.jsx       ← Month summary, pie, nudges, score preview.
+    ├── Growth.jsx          ← SIP vs cashback chart. Personalized slider.
+    └── Score.jsx           ← Score ring, insights, level journey, badges.
+```
+
+### Data flow
+```
+User logs expense
+  → addExpense() in store
+  → mirrored to localStorage immediately
+  → synced to Supabase (if configured)
+  → streak updated
+  → badge check
+  → (async) Gemini nudge generated with real context
+  → nudge saved to store + Supabase
+  → UI re-renders from store (score, breakdown, triggers all reactive)
+```
+
+### Score formula
+```
+base = 40
++ savingsRate × 40       (income - spent) / income
+- impulsiveRatio × 25    (food delivery + entertainment + shopping) / total
++ min(streak, 10)        logging habit bonus
++ 5 if savings goal set
+= clamped [1, 100]
 ```
 
 ---
 
-## 👥 Team Division (2-person guide)
+## Team split (2 people)
 
-**Person 1 — Frontend + Design**
-- `src/pages/Landing.jsx` — onboarding
-- `src/pages/Growth.jsx` — charts
-- `src/components/ui.jsx` — design system
-- `src/index.css` — global styles
+**Person A — Data & Logic**
+- `src/store/index.js`
+- `src/lib/supabase.js`
+- `src/lib/gemini.js`
+- `src/utils/finance.js`
+- `src/lib/demoSeed.js`
 
-**Person 2 — Logic + Integrations**
-- `src/lib/gemini.js` — AI integration
-- `src/lib/supabase.js` — database
-- `src/hooks/useStore.js` — state management
-- `src/utils/finance.js` — financial math
-- `src/pages/Dashboard.jsx` + `Milestones.jsx` + `Nudges.jsx`
-
----
-
-## 🤖 AI Prompt Design
-
-Kai (the AI coach) uses this system persona in all Gemini calls:
-
-> "You are Kai, a Gen-Z financial coach who is smart, relatable, and brutally honest in the nicest way. Max 3 sentences. Always mention ₹ amounts. Show time-based projections. Casual language. Sound like a smart friend, not a bank bot."
+**Person B — UI & Pages**
+- `src/components/ui/index.jsx`
+- `src/components/layout/Shell.jsx`
+- `src/pages/` (all 5 pages)
+- `src/index.css`
+- `tailwind.config.js`
 
 ---
 
-## 📐 Financial Formulas
-
-**SIP Future Value**:
-```
-FV = P × [(1 + r)ⁿ - 1] / r × (1 + r)
-```
-Where: `P` = monthly investment, `r` = monthly rate (annual/12), `n` = total months
-
-**Financial Score** (0–100):
-- Penalizes high ratio of impulsive spend (food delivery, entertainment, shopping)
-- Rewards essential spending (groceries)
-- Penalizes total spend over ₹8,000/month
-
----
-
-## 📝 License
-
-MIT — built for Finvasia Hackathon 2026. Use freely.
-
----
-
-*Built with 💜 by Team K2 · Chitkara University, Punjab*
+*Built by Team K2 · Chitkara University, Punjab · Finvasia Innovation Hackathon 2026*

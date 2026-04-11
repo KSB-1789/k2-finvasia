@@ -1,49 +1,76 @@
 // src/lib/supabase.js
-// Supabase client with graceful localStorage fallback
-// If VITE_SUPABASE_URL is not set, all data is stored locally.
+// Supabase with anonymous auth so every browser session is isolated.
+// Falls back to localStorage-only if env vars are missing.
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const url  = import.meta.env.VITE_SUPABASE_URL  || ''
+const akey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
-// Flag: true if Supabase is configured
-export const isSupabaseConfigured =
-  supabaseUrl &&
-  supabaseUrl !== 'your_supabase_project_url_here' &&
-  supabaseAnonKey &&
-  supabaseAnonKey !== 'your_supabase_anon_key_here'
+export const SUPABASE_ENABLED = Boolean(url && akey)
 
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = SUPABASE_ENABLED
+  ? createClient(url, akey, { auth: { persistSession: true, autoRefreshToken: true } })
   : null
 
-// ─── Supabase schema (run this SQL in your Supabase SQL editor) ───────────────
+/**
+ * Ensure the current browser has an anonymous Supabase session.
+ * Returns the user_id (UUID) to use as row owner.
+ * In localStorage-only mode, generates/persists a local UUID.
+ */
+export async function ensureUserId() {
+  if (SUPABASE_ENABLED && supabase) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) return session.user.id
+
+    const { data, error } = await supabase.auth.signInAnonymously()
+    if (error) {
+      console.error('Supabase anon sign-in failed:', error.message)
+      return localUserId()
+    }
+    return data.user.id
+  }
+  return localUserId()
+}
+
+function localUserId() {
+  let id = localStorage.getItem('k2_uid')
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem('k2_uid', id)
+  }
+  return id
+}
+
+// ─── SQL schema — run once in Supabase SQL editor ────────────────────────────
 /*
-create table if not exists spending_entries (
-  id uuid primary key default gen_random_uuid(),
-  user_id text not null default 'default',
-  month text not null,
-  category text not null,
-  amount numeric not null,
-  created_at timestamptz default now()
+-- Enable RLS
+alter table if exists expenses enable row level security;
+alter table if exists profile enable row level security;
+
+create table if not exists expenses (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  amount      numeric(10,2) not null check (amount > 0),
+  category    text not null,
+  note        text,
+  date        date not null default current_date,
+  created_at  timestamptz default now()
 );
 
-create table if not exists user_profile (
-  user_id text primary key default 'default',
-  score integer default 0,
-  level text default 'Saver Rookie',
-  streak integer default 0,
-  badges jsonb default '[]',
-  last_active date,
-  created_at timestamptz default now()
+create table if not exists profile (
+  user_id       uuid primary key references auth.users(id) on delete cascade,
+  name          text,
+  monthly_income numeric(10,2),
+  savings_goal  numeric(10,2),
+  onboarded     boolean default false,
+  badges        text[] default '{}',
+  streak        integer default 0,
+  last_log_date date,
+  updated_at    timestamptz default now()
 );
 
-create table if not exists nudge_history (
-  id uuid primary key default gen_random_uuid(),
-  user_id text not null default 'default',
-  nudge text not null,
-  category text,
-  created_at timestamptz default now()
-);
+-- RLS: users only see their own rows
+create policy "own rows only" on expenses for all using (auth.uid() = user_id);
+create policy "own profile only" on profile for all using (auth.uid() = user_id);
 */

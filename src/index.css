@@ -3,106 +3,74 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Base reset & scrollbar ─────────────────────────────────────────────── */
-* {
-  -webkit-tap-highlight-color: transparent;
+:root {
+  --bg: #0C0C10;
+  --surface: #131318;
+  --surface-2: #1A1A22;
+  --border: #23232F;
+  --border-2: #2D2D3C;
+  --text: #F0F0F5;
+  --text-2: #8888A0;
+  --text-3: #55556A;
+  --green: #22C55E;
+  --green-dim: #052e16;
+  --violet: #7C3AED;
+  --amber: #F59E0B;
+  --rose: #F43F5E;
 }
 
-html {
-  scroll-behavior: smooth;
-}
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
-body {
-  background-color: #0A0A0F;
-  color: #E2E8F0;
+html, body { 
+  background: var(--bg); 
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'DM Sans', system-ui, sans-serif;
   overflow-x: hidden;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
+
+/* Range inputs */
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  height: 3px; background: var(--border-2); border-radius: 99px; outline: none; width: 100%;
 }
-::-webkit-scrollbar-track {
-  background: #0A0A0F;
-}
-::-webkit-scrollbar-thumb {
-  background: #2E2E4E;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #8B5CF6;
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--green); border: 2px solid var(--bg);
+  cursor: pointer; box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent);
 }
 
-/* ─── Range input styling ─────────────────────────────────────────────────── */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  background: #1E1E2E;
-  border-radius: 4px;
-  outline: none;
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #8B5CF6;
-  cursor: pointer;
-  border: 2px solid #0A0A0F;
-  box-shadow: 0 0 8px #8B5CF680;
-}
-input[type="range"]::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #8B5CF6;
-  cursor: pointer;
-  border: 2px solid #0A0A0F;
+/* Number input — no arrows */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+input[type=number] { -moz-appearance: textfield; }
+
+/* Focus ring */
+:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 6px; }
+
+/* Utility classes */
+.surface   { background: var(--surface); border: 1px solid var(--border); }
+.surface-2 { background: var(--surface-2); border: 1px solid var(--border-2); }
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.8s infinite;
+  border-radius: 8px;
 }
 
-/* ─── Number input — hide arrows ─────────────────────────────────────────── */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-/* ─── Font utilities ──────────────────────────────────────────────────────── */
-.font-display {
-  font-family: 'Syne', sans-serif;
-}
-.font-body {
-  font-family: 'DM Sans', sans-serif;
-}
-.font-mono {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-/* ─── Glow effects ────────────────────────────────────────────────────────── */
-.glow-purple {
-  box-shadow: 0 0 20px #8B5CF640;
-}
-.glow-green {
-  box-shadow: 0 0 20px #10B98140;
-}
-
-/* ─── Gradient text ───────────────────────────────────────────────────────── */
-.text-gradient-purple {
-  background: linear-gradient(135deg, #A78BFA, #8B5CF6, #EC4899);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.text-gradient-green {
-  background: linear-gradient(135deg, #34D399, #10B981);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* Desktop layout */
+@media (min-width: 768px) {
+  .app-shell {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 100vh;
+  }
 }

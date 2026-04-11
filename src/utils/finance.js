@@ -1,111 +1,99 @@
 // src/utils/finance.js
-// Financial calculation utilities
 
-/**
- * Calculate SIP future value
- * @param {number} monthly - Monthly SIP amount
- * @param {number} rate - Annual return rate (e.g., 0.12 for 12%)
- * @param {number} years - Investment duration in years
- * @returns {number} Future value
- */
-export function sipFutureValue(monthly, rate = 0.12, years) {
-  const months = years * 12
-  const monthlyRate = rate / 12
-  return monthly * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate) * (1 + monthlyRate)
+export const CATEGORIES = [
+  { id: 'Food Delivery',  emoji: '🍕', color: '#F43F5E' },
+  { id: 'Groceries',      emoji: '🛒', color: '#22C55E' },
+  { id: 'Dining Out',     emoji: '🍽️', color: '#F97316' },
+  { id: 'Transport',      emoji: '🚇', color: '#06B6D4' },
+  { id: 'Shopping',       emoji: '🛍️', color: '#A78BFA' },
+  { id: 'Entertainment',  emoji: '🎬', color: '#EC4899' },
+  { id: 'Subscriptions',  emoji: '📱', color: '#8B5CF6' },
+  { id: 'Health',         emoji: '💊', color: '#34D399' },
+  { id: 'Education',      emoji: '📚', color: '#60A5FA' },
+  { id: 'Bills',          emoji: '⚡', color: '#FBBF24' },
+  { id: 'Others',         emoji: '📦', color: '#6B7280' },
+]
+
+export const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map(c => [c.id, c]))
+
+/** SIP future value at 12% annual (monthly compounding) */
+export function sipFV(monthly, years) {
+  const n = years * 12
+  const r = 0.01 // 1% per month
+  return monthly * ((Math.pow(1 + r, n) - 1) / r) * (1 + r)
 }
 
-/**
- * Format number as Indian currency
- */
-export function formatINR(amount) {
-  if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)}Cr`
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`
-  if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`
-  return `₹${Math.round(amount).toLocaleString('en-IN')}`
+/** Format number as ₹ with Indian notation */
+export function inr(amount, decimals = 0) {
+  if (amount == null || isNaN(amount)) return '₹0'
+  const n = Number(amount)
+  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`
+  if (n >= 100000)   return `₹${(n / 100000).toFixed(1)}L`
+  if (n >= 1000)     return `₹${(n / 1000).toFixed(1)}K`
+  return `₹${n.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
 }
 
-/**
- * Generate compounding chart data for cashback vs investment
- * @param {number} monthlySavings - Monthly amount
- * @param {number} years - Total years
- */
-export function generateGrowthData(monthlySavings, years = 10) {
-  const data = []
-  for (let y = 0; y <= years; y++) {
-    const cashbackValue = monthlySavings * 12 * y // flat accumulation
-    const sipValue = y === 0 ? 0 : sipFutureValue(monthlySavings, 0.12, y)
-    const fdValue = y === 0 ? 0 : sipFutureValue(monthlySavings, 0.065, y)
-    data.push({
-      year: y === 0 ? 'Now' : `${y}Y`,
-      cashback: Math.round(cashbackValue),
-      sip: Math.round(sipValue),
-      fd: Math.round(fdValue),
-    })
-  }
-  return data
+/** Growth comparison data for chart */
+export function growthData(monthly, years) {
+  return Array.from({ length: years + 1 }, (_, y) => ({
+    year: y === 0 ? 'Now' : `${y}Y`,
+    sip:      y === 0 ? 0 : Math.round(sipFV(monthly, y)),
+    cashback: Math.round(monthly * 12 * y),
+    fd:       y === 0 ? 0 : Math.round(sipFV(monthly, y) * 0.62), // approximate FD at ~6.5%
+  }))
 }
 
-/**
- * Smart saving trigger rules
- */
-export const SAVING_TRIGGERS = [
+/** Level info based on score */
+export function levelFromScore(score) {
+  if (!score) return { name: 'Not rated yet', emoji: '—', color: '#6B7280', next: 'Log expenses to get rated' }
+  if (score >= 85) return { name: 'Wealth Builder',  emoji: '🏔️', color: '#F59E0B', next: null }
+  if (score >= 70) return { name: 'SIP Starter',     emoji: '🚀', color: '#22C55E', next: 'Wealth Builder at 85' }
+  if (score >= 55) return { name: 'Budget Boss',     emoji: '💡', color: '#06B6D4', next: 'SIP Starter at 70' }
+  if (score >= 40) return { name: 'Saver Rookie',    emoji: '🌱', color: '#A78BFA', next: 'Budget Boss at 55' }
+  return             { name: 'Spend Explorer',       emoji: '🗺️', color: '#F43F5E', next: 'Saver Rookie at 40' }
+}
+
+export const ALL_BADGES = {
+  first_log:   { emoji: '📝', name: 'First Log',     desc: 'Logged your first expense.' },
+  ten_logs:    { emoji: '🔟', name: 'Ten Deep',       desc: 'Logged 10 expenses.' },
+  week_streak: { emoji: '🔥', name: '7-Day Streak',   desc: 'Logged every day for a week.' },
+  score_60:    { emoji: '⚡', name: 'Halfway',         desc: 'Financial score hit 60.' },
+  score_80:    { emoji: '🏆', name: 'Power Saver',    desc: 'Financial score hit 80.' },
+}
+
+/** Trigger rules — fire when category exceeds threshold */
+export const TRIGGERS = [
   {
-    id: 'food_delivery_heavy',
+    id: 'food_high',
     category: 'Food Delivery',
-    condition: (amt) => amt > 2000,
-    threshold: 2000,
-    suggestSave: 200,
-    label: 'Food delivery > ₹2000/month',
-    description: 'Order delivery more than 3x a week? Auto-divert ₹200 to savings.',
+    thresholdPct: 0.10, // 10% of income
+    saveSuggestion: (excess) => Math.round(Math.min(excess * 0.5, 1000)),
+    label: (cat, amt, income) => `Food delivery hit ₹${inr(amt)} — ${((amt/income)*100).toFixed(0)}% of your income`,
+  },
+  {
+    id: 'shopping_high',
+    category: 'Shopping',
+    thresholdPct: 0.15,
+    saveSuggestion: (excess) => Math.round(Math.min(excess * 0.4, 800)),
+    label: (cat, amt) => `Shopping at ${inr(amt)} this month — check if it was all intentional`,
   },
   {
     id: 'entertainment_high',
     category: 'Entertainment',
-    condition: (amt) => amt > 1500,
-    threshold: 1500,
-    suggestSave: 150,
-    label: 'Entertainment > ₹1500/month',
-    description: 'Weekend movies & OTT adding up? Redirect ₹150 to a liquid fund.',
-  },
-  {
-    id: 'shopping_splurge',
-    category: 'Shopping',
-    condition: (amt) => amt > 3000,
-    threshold: 3000,
-    suggestSave: 300,
-    label: 'Shopping > ₹3000/month',
-    description: 'Impulse buys stacking up — save ₹300/month instead.',
-  },
-  {
-    id: 'subscriptions_creep',
-    category: 'Subscriptions',
-    condition: (amt) => amt > 800,
-    threshold: 800,
-    suggestSave: 100,
-    label: 'Subscriptions > ₹800/month',
-    description: 'Subscription creep is real. Audit & save ₹100+.',
+    thresholdPct: 0.08,
+    saveSuggestion: (excess) => Math.round(Math.min(excess * 0.5, 500)),
+    label: (cat, amt) => `Entertainment spend: ${inr(amt)} — nice, but let's see what half of that compounds to`,
   },
 ]
 
-/**
- * Check which triggers are active for current spending
- */
-export function getActiveTriggers(spending) {
-  return SAVING_TRIGGERS.filter(t => {
-    const amt = spending[t.category] || 0
-    return t.condition(amt)
-  })
-}
-
-// Badge definitions
-export const BADGES = {
-  first_login: { name: 'First Step', emoji: '👋', desc: 'You showed up. That already puts you ahead.' },
-  week_streak: { name: '7-Day Streak', emoji: '🔥', desc: 'A week of tracking. The habit is forming.' },
-  score_50: { name: 'Halfway There', emoji: '⚡', desc: 'Crossed 50 on the wealth score.' },
-  score_70: { name: 'Budget Boss', emoji: '💡', desc: 'Score hit 70. You\'re in the top tier.' },
-  score_85: { name: 'Wealth Builder', emoji: '🏔️', desc: 'Score 85+. You\'re what GenZ finance looks like.' },
-  first_nudge: { name: 'Kai\'s Friend', emoji: '🤝', desc: 'Got your first AI nudge from Kai.' },
-  cashback_convert: { name: 'Convertor', emoji: '⚗️', desc: 'Ran the cashback → investment calculator.' },
-  trigger_fired: { name: 'Rule Setter', emoji: '⚙️', desc: 'A smart saving trigger fired for you.' },
-  low_food: { name: 'Home Chef', emoji: '👨‍🍳', desc: 'Food delivery under ₹1500 — cooking it!' },
+export function getActiveTriggers(byCategory, income) {
+  if (!income) return []
+  return TRIGGERS.filter(t => (byCategory[t.category] || 0) > income * t.thresholdPct)
+    .map(t => {
+      const amt = byCategory[t.category]
+      const excess = amt - income * t.thresholdPct
+      const saveSuggestion = t.saveSuggestion(excess)
+      const fiveYr = Math.round(sipFV(saveSuggestion, 5))
+      return { ...t, amt, saveSuggestion, fiveYr, label: t.label(t.category, amt, income) }
+    })
 }

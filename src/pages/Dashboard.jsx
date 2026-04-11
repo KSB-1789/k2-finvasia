@@ -1,255 +1,302 @@
 // src/pages/Dashboard.jsx
-// Spending Input & Analysis + Smart Saving Triggers
+// Summary screen. Shows THIS MONTH's real data.
+// No data = empty state with actionable CTA. No fake numbers ever.
 
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useNavigate } from 'react-router-dom'
-import { Card, Button, SectionHeader, Pill, Toast } from '../components/ui'
-import { TopBar } from '../components/Nav'
-import { generateNudges } from '../lib/gemini'
-import { getActiveTriggers } from '../utils/finance'
-import { formatINR } from '../utils/finance'
+import { motion } from 'framer-motion'
+import { format, startOfMonth, parseISO } from 'date-fns'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { useStore } from '../store'
+import { generateNudges, GEMINI_ENABLED } from '../lib/gemini'
+import { CATEGORY_MAP, inr, getActiveTriggers } from '../utils/finance'
+import { Card, Button, ScoreRing, Empty, useToast, Toast } from '../components/ui'
+import { computeScore, scoreInsights } from '../store'
 
-const CATEGORIES = [
-  { name: 'Food Delivery', icon: '🍕', color: '#F43F5E' },
-  { name: 'Entertainment', icon: '🎬', color: '#8B5CF6' },
-  { name: 'Shopping', icon: '🛍️', color: '#F59E0B' },
-  { name: 'Transport', icon: '🚗', color: '#06B6D4' },
-  { name: 'Subscriptions', icon: '📱', color: '#EC4899' },
-  { name: 'Groceries', icon: '🥗', color: '#10B981' },
-  { name: 'Dining Out', icon: '🍽️', color: '#F97316' },
-  { name: 'Others', icon: '💡', color: '#6B7280' },
-]
-
-const CustomTooltip = ({ active, payload }) => {
-  if (active && payload?.length) {
-    return (
-      <div className="bg-[#1A1A25] border border-[#2E2E4E] rounded-xl px-3 py-2 text-sm">
-        <span className="text-white font-semibold">{payload[0].name}</span>
-        <br />
-        <span className="text-purple-300">{formatINR(payload[0].value)}</span>
-      </div>
-    )
-  }
-  return null
+const PIE_TOOLTIP = ({ active, payload }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-[#1A1A22] border border-[#2D2D3C] rounded-xl px-3 py-2 text-xs">
+      <p className="text-[#F0F0F5] font-semibold">{payload[0].name}</p>
+      <p className="text-[#22C55E] font-mono">{inr(payload[0].value)}</p>
+    </div>
+  )
 }
 
-export default function Dashboard({ store }) {
-  const { spending, updateSpending, addNudge, score, levelInfo } = store
+export default function Dashboard() {
   const navigate = useNavigate()
-  const [editMode, setEditMode] = useState(false)
-  const [localSpend, setLocalSpend] = useState({ ...spending })
+  const { expenses, profile, nudges, byCategory, addNudge } = useStore(s => ({
+    expenses:   s.expenses,
+    profile:    s.profile,
+    nudges:     s.nudges,
+    byCategory: s.byCategory,
+    addNudge:   s.addNudge,
+  }))
+
   const [loadingNudge, setLoadingNudge] = useState(false)
-  const [toast, setToast] = useState(null)
+  const { toasts, toast } = useToast()
 
-  const total = Object.values(localSpend).reduce((a, b) => a + b, 0)
-  const activeTriggers = getActiveTriggers(localSpend)
+  const income = profile?.monthly_income || 0
+  const goal   = profile?.savings_goal   || 0
+  const thisMonth = format(startOfMonth(new Date()), 'yyyy-MM')
+  const monthExpenses = expenses.filter(e => e.date.startsWith(thisMonth))
+  const totalSpent = monthExpenses.reduce((s, e) => s + e.amount, 0)
+  const saved = Math.max(0, income - totalSpent)
+  const savingsRate = income > 0 ? (saved / income) * 100 : 0
 
-  const pieData = CATEGORIES.map(c => ({
-    name: c.name,
-    value: localSpend[c.name] || 0,
-    color: c.color,
-  })).filter(d => d.value > 0)
+  const score   = computeScore({ expenses, profile })
+  const insights = scoreInsights({ expenses, profile })
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
+  const pieData = Object.entries(byCategory)
+    .sort(([, a], [, b]) => b - a)
+    .map(([cat, amt]) => ({ name: cat, value: amt, color: CATEGORY_MAP[cat]?.color || '#6B7280' }))
 
-  const handleSave = async () => {
-    await updateSpending(localSpend)
-    setEditMode(false)
-    showToast('Spending updated! Kai is analyzing... 🤖', 'info')
-  }
+  const triggers = getActiveTriggers(byCategory, income)
+  const recentNudges = nudges.slice(0, 3)
 
-  const handleGetNudges = async () => {
+  async function refreshNudges() {
+    if (!monthExpenses.length) { toast('Log some expenses first — Kai needs real data', 'error'); return }
     setLoadingNudge(true)
     try {
-      const nudgeTexts = await generateNudges(localSpend)
-      for (const text of nudgeTexts) {
-        await addNudge(text)
-      }
-      navigate('/nudges')
-    } catch (err) {
-      showToast('Could not fetch nudges. Check your Gemini API key.', 'error')
+      const texts = await generateNudges({ expenses: monthExpenses, profile, byCategory, totalThisMonth: totalSpent })
+      for (const text of texts) await addNudge({ text })
+      toast('Fresh nudges from Kai ✓', 'success')
+    } catch {
+      toast('Could not reach Gemini. Check API key.', 'error')
     } finally {
       setLoadingNudge(false)
     }
   }
 
+  const hasData = monthExpenses.length > 0
+
   return (
-    <div className="min-h-screen bg-[#0A0A0F] pb-24">
-      <TopBar title="Spending Dashboard" subtitle={`Total this month: ${formatINR(total)}`} />
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      <Toast toasts={toasts} />
 
-      <div className="max-w-lg mx-auto px-4 py-5 space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-[#F0F0F5]">
+            {profile?.name ? `Hey, ${profile.name}` : 'Dashboard'}
+          </h1>
+          <p className="text-sm text-[#8888A0]">{format(new Date(), 'MMMM yyyy')}</p>
+        </div>
+        <Button size="sm" onClick={() => navigate('/log')}>+ Log</Button>
+      </div>
 
-        {/* Score snapshot */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-violet-900/30 to-purple-900/20 border border-purple-700/30 rounded-2xl p-4 flex items-center justify-between"
-        >
-          <div>
-            <p className="text-slate-400 text-xs mb-1">Financial Score</p>
-            <p className="font-display font-black text-3xl text-white">{score}<span className="text-slate-600 text-lg">/100</span></p>
-            <p className="text-purple-300 text-sm mt-1">{levelInfo.emoji} {levelInfo.name}</p>
+      {/* Key metrics row */}
+      <div className="grid grid-cols-3 gap-3">
+        <MetricCard
+          label="Spent"
+          value={inr(totalSpent)}
+          sub={income ? `of ${inr(income)}` : 'no income set'}
+          color={totalSpent > income && income ? '#F43F5E' : '#F0F0F5'}
+        />
+        <MetricCard
+          label="Saved"
+          value={inr(saved)}
+          sub={income ? `${savingsRate.toFixed(0)}% rate` : '—'}
+          color={savingsRate >= 20 ? '#22C55E' : savingsRate >= 10 ? '#F59E0B' : '#F0F0F5'}
+        />
+        <MetricCard
+          label="Logged"
+          value={monthExpenses.length}
+          sub="expenses"
+          color="#F0F0F5"
+        />
+      </div>
+
+      {/* Goal progress */}
+      {goal > 0 && income > 0 && (
+        <div className="bg-[#131318] border border-[#23232F] rounded-2xl p-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs text-[#8888A0] font-medium">Monthly Goal: {inr(goal)}</span>
+            <span className={`text-xs font-mono font-bold ${saved >= goal ? 'text-[#22C55E]' : 'text-[#8888A0]'}`}>
+              {saved >= goal ? '✓ Reached' : `${inr(goal - saved)} to go`}
+            </span>
           </div>
-          <Button size="sm" onClick={() => navigate('/milestones')}>View Progress →</Button>
-        </motion.div>
+          <div className="h-1.5 bg-[#23232F] rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(100, (saved / goal) * 100)}%` }}
+              transition={{ duration: 1, ease: 'easeOut' }}
+              className="h-full rounded-full bg-[#22C55E]"
+            />
+          </div>
+        </div>
+      )}
 
-        {/* Pie Chart */}
-        <Card>
-          <SectionHeader title="Spending Breakdown" subtitle="This month" />
-          {total > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} stroke="transparent" />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-40 flex items-center justify-center text-slate-600 text-sm">
-              Add spending to see your breakdown
+      {!hasData ? (
+        <Card className="py-2">
+          <Empty
+            icon="📊"
+            title="Nothing logged this month"
+            body="Start tracking your expenses — your dashboard, score, and AI nudges are all built from your real data."
+            action={<Button onClick={() => navigate('/log')}>Log your first expense →</Button>}
+          />
+        </Card>
+      ) : (
+        <>
+          {/* Spending breakdown */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Pie */}
+            <Card className="p-4">
+              <p className="text-xs text-[#8888A0] font-semibold uppercase tracking-wider mb-3">By Category</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={2} dataKey="value">
+                    {pieData.map((d, i) => <Cell key={i} fill={d.color} stroke="transparent" />)}
+                  </Pie>
+                  <Tooltip content={<PIE_TOOLTIP />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </Card>
+
+            {/* Category list */}
+            <Card className="p-4">
+              <p className="text-xs text-[#8888A0] font-semibold uppercase tracking-wider mb-3">Breakdown</p>
+              <div className="space-y-2.5">
+                {pieData.slice(0, 6).map(d => (
+                  <div key={d.name} className="flex items-center gap-2.5">
+                    <span className="text-sm">{CATEGORY_MAP[d.name]?.emoji || '📦'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between mb-0.5">
+                        <span className="text-xs text-[#8888A0] truncate">{d.name}</span>
+                        <span className="text-xs font-mono text-[#F0F0F5]">{inr(d.value)}</span>
+                      </div>
+                      <div className="h-1 bg-[#23232F] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${(d.value / totalSpent) * 100}%`, background: d.color }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {/* Smart triggers */}
+          {triggers.length > 0 && (
+            <div>
+              <p className="text-xs text-[#55556A] font-semibold uppercase tracking-wider mb-2">⚡ Smart Triggers</p>
+              <div className="space-y-2">
+                {triggers.map(t => (
+                  <div key={t.id} className="bg-[#451a03]/30 border border-[#78350F]/40 rounded-xl p-3 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-[#FCD34D] font-semibold">{t.label}</p>
+                      <p className="text-xs text-[#8888A0] mt-0.5">
+                        Save ₹{t.saveSuggestion}/mo → {inr(t.fiveYr)} in 5yr at 12%
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Legend */}
-          <div className="grid grid-cols-2 gap-1.5 mt-3">
-            {pieData.map(d => (
-              <div key={d.name} className="flex items-center gap-2 text-xs text-slate-400">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                <span className="truncate">{d.name}</span>
-                <span className="ml-auto text-slate-300 font-mono">{formatINR(d.value)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Category Inputs */}
-        <Card>
-          <SectionHeader
-            title="Monthly Spending"
-            action={
-              <Button size="sm" variant={editMode ? 'green' : 'secondary'} onClick={editMode ? handleSave : () => setEditMode(true)}>
-                {editMode ? 'Save ✓' : 'Edit'}
-              </Button>
-            }
-          />
-          <div className="space-y-3">
-            {CATEGORIES.map(cat => (
-              <div key={cat.name} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                  style={{ background: cat.color + '20' }}>
-                  {cat.icon}
-                </div>
-                <span className="text-slate-300 text-sm flex-1 font-body">{cat.name}</span>
-                {editMode ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 text-sm">₹</span>
-                    <input
-                      type="number"
-                      value={localSpend[cat.name] || ''}
-                      onChange={e => setLocalSpend(prev => ({ ...prev, [cat.name]: parseInt(e.target.value) || 0 }))}
-                      className="w-24 bg-[#1A1A25] border border-[#2E2E4E] rounded-lg px-2 py-1 text-white text-sm text-right font-mono focus:border-purple-600 focus:outline-none"
-                      placeholder="0"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 rounded-full bg-[#1E1E2E] w-20 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: total > 0 ? `${Math.min(100, ((localSpend[cat.name] || 0) / total) * 100)}%` : '0%',
-                          background: cat.color
-                        }}
-                      />
-                    </div>
-                    <span className="text-slate-300 text-sm font-mono w-16 text-right">
-                      {formatINR(localSpend[cat.name] || 0)}
-                    </span>
-                  </div>
+          {/* Score preview */}
+          {score != null && (
+            <Card className="p-4 flex items-center gap-5">
+              <ScoreRing score={score} size={80} stroke={6} />
+              <div className="flex-1">
+                <p className="text-xs text-[#8888A0] mb-0.5">Financial Score</p>
+                <p className="text-[#F0F0F5] font-bold text-lg">{score}/100</p>
+                {insights.drags[0] && (
+                  <p className="text-xs text-[#F43F5E] mt-1">↓ {insights.drags[0]}</p>
+                )}
+                {insights.boosts[0] && (
+                  <p className="text-xs text-[#22C55E] mt-0.5">↑ {insights.boosts[0]}</p>
                 )}
               </div>
+              <Button size="sm" variant="secondary" onClick={() => navigate('/score')}>Details</Button>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* AI Nudges section */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-[#55556A] font-semibold uppercase tracking-wider">Kai's Nudges</p>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={refreshNudges}
+            loading={loadingNudge}
+            disabled={!hasData}
+          >
+            {GEMINI_ENABLED ? '🤖 Ask Kai' : '🤖 Demo Nudge'}
+          </Button>
+        </div>
+
+        {recentNudges.length === 0 ? (
+          <div className="bg-[#131318] border border-[#23232F] rounded-2xl p-5 text-center">
+            <p className="text-[#8888A0] text-sm">
+              {hasData
+                ? 'Hit "Ask Kai" to get personalized nudges based on your actual spending.'
+                : 'Log expenses first — Kai needs your real data to give useful advice.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentNudges.map((n, i) => (
+              <NudgeCard key={n.id} nudge={n} index={i} />
             ))}
           </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
-          <div className="mt-4 pt-4 border-t border-[#1E1E2E] flex items-center justify-between">
-            <div>
-              <span className="text-slate-500 text-xs">Total</span>
-              <span className="text-white font-display font-bold text-lg ml-2">{formatINR(total)}</span>
-            </div>
-            {editMode && (
-              <Button size="sm" variant="ghost" onClick={() => { setLocalSpend({ ...spending }); setEditMode(false) }}>
-                Cancel
-              </Button>
+function MetricCard({ label, value, sub, color }) {
+  return (
+    <div className="bg-[#131318] border border-[#23232F] rounded-2xl p-3">
+      <p className="text-[#55556A] text-[10px] font-semibold uppercase tracking-wider mb-1">{label}</p>
+      <p className="font-mono font-bold text-base leading-tight" style={{ color }}>{value}</p>
+      {sub && <p className="text-[#55556A] text-[10px] mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
+function NudgeCard({ nudge, index }) {
+  const rateNudge = useStore(s => s.rateNudge)
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06 }}
+      className="bg-[#131318] border border-[#23232F] rounded-2xl p-4"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-7 h-7 rounded-lg bg-[#4C1D95] border border-[#7C3AED]/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-sm">🤖</span>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-xs font-semibold text-[#A78BFA]">Kai</span>
+            {nudge.category && (
+              <span className="text-[10px] text-[#55556A] bg-[#1A1A22] border border-[#23232F] px-1.5 py-0.5 rounded-md">
+                {nudge.category}
+              </span>
             )}
           </div>
-        </Card>
-
-        {/* Active Triggers */}
-        {activeTriggers.length > 0 && (
-          <Card glow>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-lg">⚡</span>
-              <h3 className="font-display font-bold text-white text-sm">Smart Saving Triggers</h3>
-              <Pill color="coral">{activeTriggers.length} active</Pill>
-            </div>
-            <div className="space-y-3">
-              {activeTriggers.map(trigger => (
-                <motion.div
-                  key={trigger.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="bg-rose-950/20 border border-rose-800/30 rounded-xl p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-rose-300 text-xs font-semibold">{trigger.label}</p>
-                      <p className="text-slate-400 text-xs mt-0.5">{trigger.description}</p>
-                    </div>
-                    <Pill color="coral">Save ₹{trigger.suggestSave}</Pill>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* CTA */}
-        <Button
-          size="lg"
-          className="w-full"
-          onClick={handleGetNudges}
-          loading={loadingNudge}
-        >
-          {loadingNudge ? 'Kai is analyzing...' : '🤖 Get AI Nudges from Kai'}
-        </Button>
-
-        {/* Supabase indicator */}
-        <div className="text-center">
-          <span className={`text-[10px] font-mono ${store.isSupabaseConfigured ? 'text-emerald-600' : 'text-slate-700'}`}>
-            {store.isSupabaseConfigured ? '● Synced to Supabase' : '● Stored locally (configure Supabase in .env)'}
-          </span>
+          <p className="text-sm text-[#C8C8D8] leading-relaxed">{nudge.text}</p>
+          <div className="flex gap-2 mt-2.5">
+            <button
+              onClick={() => rateNudge(nudge.id, 'up')}
+              className={`text-xs px-2 py-1 rounded-lg border transition-all ${nudge.rating === 'up' ? 'bg-[#052e16] border-[#22C55E] text-[#22C55E]' : 'border-[#23232F] text-[#55556A] hover:border-[#3D3D50]'}`}
+            >👍</button>
+            <button
+              onClick={() => rateNudge(nudge.id, 'down')}
+              className={`text-xs px-2 py-1 rounded-lg border transition-all ${nudge.rating === 'down' ? 'bg-[#4c0519] border-[#F43F5E] text-[#F43F5E]' : 'border-[#23232F] text-[#55556A] hover:border-[#3D3D50]'}`}
+            >👎</button>
+          </div>
         </div>
       </div>
-
-      <AnimatePresence>
-        {toast && <Toast message={toast.message} type={toast.type} />}
-      </AnimatePresence>
-    </div>
+    </motion.div>
   )
 }
