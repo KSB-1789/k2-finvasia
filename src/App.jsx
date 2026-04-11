@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useStore } from './store'
 import { shallow } from 'zustand/shallow'
 import { SUPABASE_ENABLED, supabase } from './lib/supabase'
-import { isProfileOnboarded } from './store'
+import { isProfileOnboarded, isSignupOnboardingPending } from './store'
 import Shell from './components/layout/Shell'
 import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
@@ -22,7 +22,11 @@ function RequireOnboarding({ children }) {
 
   if (loading) return <AppLoader />
   if (SUPABASE_ENABLED && !userId) return <Navigate to="/onboarding" state={{ from: location }} replace />
-  if (!isProfileOnboarded(profile)) return <Navigate to="/onboarding" state={{ from: location }} replace />
+  const mustFinishProfile =
+    SUPABASE_ENABLED
+      ? isSignupOnboardingPending() && !isProfileOnboarded(profile)
+      : !isProfileOnboarded(profile)
+  if (mustFinishProfile) return <Navigate to="/onboarding" state={{ from: location }} replace />
   return children
 }
 

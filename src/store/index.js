@@ -48,6 +48,33 @@ export function isProfileOnboarded(p) {
   return p?.onboarded === true
 }
 
+/** Set after email sign-up (with session). Cleared on sign-in, logout, or wizard complete. */
+const LS_SIGNUP_ONBOARDING = 'k2:signup-onboarding-pending'
+
+export function setSignupOnboardingPending() {
+  try {
+    localStorage.setItem(LS_SIGNUP_ONBOARDING, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearSignupOnboardingPending() {
+  try {
+    localStorage.removeItem(LS_SIGNUP_ONBOARDING)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isSignupOnboardingPending() {
+  try {
+    return localStorage.getItem(LS_SIGNUP_ONBOARDING) === '1'
+  } catch {
+    return false
+  }
+}
+
 // ── Score computation (pure function, no side effects) ─────────────────────
 export function computeScore({ expenses, profile }) {
   if (!expenses.length || !profile?.monthly_income) return null
@@ -176,6 +203,7 @@ export const useStore = create(
       if (SUPABASE_ENABLED && supabase) {
         await supabase.auth.signOut()
       }
+      clearSignupOnboardingPending()
       set(s => {
         s.userId = null
         s.authEmail = null

@@ -5,7 +5,13 @@
 import { useState, useCallback, useLayoutEffect, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useStore, seedDemoData, isProfileOnboarded } from '../store'
+import {
+  useStore,
+  seedDemoData,
+  isProfileOnboarded,
+  setSignupOnboardingPending,
+  clearSignupOnboardingPending,
+} from '../store'
 import { shallow } from 'zustand/shallow'
 import { supabase, SUPABASE_ENABLED } from '../lib/supabase'
 import { Button, Input } from '../components/ui/index.jsx'
@@ -56,6 +62,7 @@ function runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS, onlyAd
   const p = useStore.getState().profile
 
   if (isProfileOnboarded(p)) {
+    clearSignupOnboardingPending()
     navigate('/log', { replace: true })
     setCred({ email: '', password: '', confirm: '' })
     return
@@ -67,7 +74,10 @@ function runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS, onlyAd
         onboarded: true,
         savings_goal: p.savings_goal != null && p.savings_goal !== '' ? Number(p.savings_goal) : null,
       })
-      .then(() => navigate('/log', { replace: true }))
+      .then(() => {
+        clearSignupOnboardingPending()
+        navigate('/log', { replace: true })
+      })
     setCred({ email: '', password: '', confirm: '' })
     return
   }
@@ -169,18 +179,23 @@ export default function Onboarding() {
         const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: cred.password })
         if (error) throw error
         session = data.session
-      } else {
-        const { data, error } = await supabase.auth.signUp({ email: em, password: cred.password })
-        if (error) throw error
-        if (!data.session) {
-          setAuthMsgKind('info')
-          setAuthMsg('Check your inbox to confirm your email, then sign in. (You can disable confirmation in Supabase Auth → Email for development.)')
-          setAuthMode('signin')
-          setLoading(false)
-          return
-        }
-        session = data.session
+        clearSignupOnboardingPending()
+        await useStore.getState().init({ session })
+        navigate('/log', { replace: true })
+        setCred({ email: '', password: '', confirm: '' })
+        return
       }
+      const { data, error } = await supabase.auth.signUp({ email: em, password: cred.password })
+      if (error) throw error
+      if (!data.session) {
+        setAuthMsgKind('info')
+        setAuthMsg('Check your inbox to confirm your email, then sign in. (You can disable confirmation in Supabase Auth → Email for development.)')
+        setAuthMode('signin')
+        setLoading(false)
+        return
+      }
+      session = data.session
+      setSignupOnboardingPending()
       await useStore.getState().init({ session })
       runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS })
     } catch (err) {
@@ -214,6 +229,7 @@ export default function Onboarding() {
         onboarded: true,
         is_demo: false,
       })
+      clearSignupOnboardingPending()
       navigate('/log')
     } finally {
       setLoading(false)
@@ -224,6 +240,7 @@ export default function Onboarding() {
     setLoading(true)
     try {
       await saveProfile({ ...DEMO_PROFILE, onboarded: true, badges: ['first_log'] })
+      clearSignupOnboardingPending()
       const { useStore: rawStore } = await import('../store')
       await seedDemoData(rawStore)
       navigate('/dashboard')
