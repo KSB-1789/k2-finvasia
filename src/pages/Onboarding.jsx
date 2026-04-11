@@ -2,7 +2,7 @@
 // Local: Name → Income → Goal.
 // Supabase: Account (email + password) → Name → Income → Goal.
 
-import { useState, useCallback, useLayoutEffect, useMemo } from 'react'
+import { useState, useCallback, useLayoutEffect, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore, seedDemoData, isProfileOnboarded } from '../store'
@@ -52,7 +52,7 @@ function hydrateFormFromProfile(p, setForm) {
 }
 
 /** After session + profile load: go to app if done; else skip filled steps or finish without goal UI when name+income exist. */
-function runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS }) {
+function runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS, onlyAdvanceStep = false }) {
   const p = useStore.getState().profile
 
   if (isProfileOnboarded(p)) {
@@ -72,8 +72,19 @@ function runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS }) {
     return
   }
 
-  setStep(firstIncompleteWizardStep(STEPS, p))
-  hydrateFormFromProfile(p, setForm)
+  const target = firstIncompleteWizardStep(STEPS, p)
+  if (onlyAdvanceStep) {
+    setStep(s => {
+      if (target > s) {
+        if (p) hydrateFormFromProfile(p, setForm)
+        return target
+      }
+      return s
+    })
+  } else {
+    setStep(target)
+    if (p) hydrateFormFromProfile(p, setForm)
+  }
   setCred({ email: '', password: '', confirm: '' })
 }
 
@@ -107,6 +118,13 @@ export default function Onboarding() {
     if (SUPABASE_ENABLED && !userId) return
     runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS })
   }, [bootLoading, userId, STEPS, navigate])
+
+  // Second init (e.g. auth listener) can populate profile after first paint — skip wizard without resetting mid-form backward.
+  useEffect(() => {
+    if (bootLoading || (SUPABASE_ENABLED && !userId)) return
+    if (!profile) return
+    runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS, onlyAdvanceStep: true })
+  }, [bootLoading, userId, profile?.onboarded, profile?.name, profile?.monthly_income, STEPS, navigate])
 
   function setFormKey(key, val) {
     setForm(p => ({ ...p, [key]: val }))
@@ -146,9 +164,11 @@ export default function Onboarding() {
 
     setLoading(true)
     try {
+      let session = null
       if (authMode === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({ email: em, password: cred.password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: cred.password })
         if (error) throw error
+        session = data.session
       } else {
         const { data, error } = await supabase.auth.signUp({ email: em, password: cred.password })
         if (error) throw error
@@ -159,8 +179,9 @@ export default function Onboarding() {
           setLoading(false)
           return
         }
+        session = data.session
       }
-      await useStore.getState().init()
+      await useStore.getState().init({ session })
       runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS })
     } catch (err) {
       setAuthMsgKind('error')

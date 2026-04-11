@@ -115,17 +115,29 @@ export const useStore = create(
     syncing: false,
 
     // ── Init: load userId, then pull profile + expenses
-    async init() {
+    // Pass `session` right after signIn/signUp so we never race getSession() before the client persists it.
+    async init(opts = {}) {
+      const passedSession = opts?.session ?? null
       set(s => { s.loading = true })
-      const uid = await ensureUserId()
+
+      let uid
+      if (SUPABASE_ENABLED && supabase && passedSession?.user?.id) {
+        uid = passedSession.user.id
+      } else {
+        uid = await ensureUserId()
+      }
+
+      const emailFromPass = passedSession?.user?.email ?? null
       set(s => {
         s.userId = uid
-        s.authEmail = null
+        s.authEmail = emailFromPass
       })
 
       if (SUPABASE_ENABLED && supabase) {
-        const { data: { session } } = await supabase.auth.getSession()
-        set(s => { s.authEmail = session?.user?.email ?? null })
+        if (emailFromPass == null) {
+          const { data: { session } } = await supabase.auth.getSession()
+          set(s => { s.authEmail = session?.user?.email ?? null })
+        }
         if (!uid) {
           set(s => {
             s.profile = null
