@@ -2,6 +2,7 @@
 // Shared UI primitives — design system components
 
 import { motion } from 'framer-motion'
+import { forwardRef, useState, useCallback } from 'react'
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 export function Card({ children, className = '', glow = false, onClick }) {
@@ -74,6 +75,35 @@ export function Button({ children, onClick, variant = 'primary', size = 'md', di
     </motion.button>
   )
 }
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+export const Input = forwardRef(function Input({ label, error, prefix, className = '', ...props }, ref) {
+  return (
+    <div className="space-y-1.5">
+      {label && <label className="text-xs font-medium text-[#8888A0] uppercase tracking-wider">{label}</label>}
+      <div className="relative">
+        {prefix && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8888A0] text-sm font-mono select-none">
+            {prefix}
+          </span>
+        )}
+        <input
+          ref={ref}
+          className={`
+            w-full bg-[#1A1A22] border border-[#23232F] rounded-xl text-[#F0F0F5] text-sm
+            px-3 py-2.5 outline-none transition-colors placeholder-[#55556A]
+            focus:border-[#22C55E] hover:border-[#2D2D3C]
+            ${prefix ? 'pl-8' : ''}
+            ${error ? 'border-[#F43F5E]' : ''}
+            ${className}
+          `}
+          {...props}
+        />
+      </div>
+      {error && <p className="text-xs text-[#F43F5E]">{error}</p>}
+    </div>
+  )
+})
 
 // ─── Score Ring ───────────────────────────────────────────────────────────────
 export function ScoreRing({ score, size = 120, strokeWidth = 8 }) {
@@ -167,4 +197,27 @@ export function Toast({ message, type = 'success', onClose }) {
       {message}
     </motion.div>
   )
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+export function Empty({ icon, title, body, action }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-14 text-center px-6">
+      <div className="text-4xl mb-3">{icon}</div>
+      <h3 className="font-semibold text-[#F0F0F5] mb-1">{title}</h3>
+      <p className="text-sm text-[#8888A0] mb-5 max-w-xs">{body}</p>
+      {action}
+    </div>
+  )
+}
+
+// ─── Inline hook for toasts ───────────────────────────────────────────────────
+export function useToast() {
+  const [toasts, setToasts] = useState([])
+  const toast = useCallback((message, type = 'info', ms = 3000) => {
+    const id = Date.now()
+    setToasts(p => [...p, { id, message, type }])
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), ms)
+  }, [])
+  return { toasts, toast }
 }
