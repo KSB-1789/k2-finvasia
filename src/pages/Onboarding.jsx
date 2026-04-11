@@ -20,6 +20,63 @@ const DEMO_PROFILE = {
   is_demo: true,
 }
 
+function profileHasName(p) {
+  return Boolean(p?.name?.trim())
+}
+
+function profileHasIncome(p) {
+  const v = p?.monthly_income
+  return v != null && !Number.isNaN(Number(v)) && Number(v) >= 1000
+}
+
+/** First wizard step index that still needs input (auth handled separately). */
+function firstIncompleteWizardStep(steps, p) {
+  let i = 0
+  if (steps[0] === 'auth') i = 1
+  for (; i < steps.length; i++) {
+    const k = steps[i]
+    if (k === 'name' && !profileHasName(p)) return i
+    if (k === 'income' && !profileHasIncome(p)) return i
+    if (k === 'goal') return i
+  }
+  return Math.max(0, steps.length - 1)
+}
+
+function hydrateFormFromProfile(p, setForm) {
+  if (!p) return
+  setForm({
+    name: p.name?.trim() ? String(p.name) : '',
+    monthly_income: p.monthly_income != null ? String(p.monthly_income) : '',
+    savings_goal: p.savings_goal != null && p.savings_goal !== '' ? String(p.savings_goal) : '',
+  })
+}
+
+/** After session + profile load: go to app if done; else skip filled steps or finish without goal UI when name+income exist. */
+function runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS }) {
+  const p = useStore.getState().profile
+
+  if (p?.onboarded) {
+    navigate('/log', { replace: true })
+    setCred({ email: '', password: '', confirm: '' })
+    return
+  }
+
+  if (profileHasName(p) && profileHasIncome(p) && !p?.onboarded) {
+    void useStore.getState()
+      .saveProfile({
+        onboarded: true,
+        savings_goal: p.savings_goal != null && p.savings_goal !== '' ? Number(p.savings_goal) : null,
+      })
+      .then(() => navigate('/log', { replace: true }))
+    setCred({ email: '', password: '', confirm: '' })
+    return
+  }
+
+  setStep(firstIncompleteWizardStep(STEPS, p))
+  hydrateFormFromProfile(p, setForm)
+  setCred({ email: '', password: '', confirm: '' })
+}
+
 export default function Onboarding() {
   const navigate = useNavigate()
   const saveProfile = useStore(useCallback(s => s.saveProfile, []), shallow)
@@ -44,23 +101,11 @@ export default function Onboarding() {
 
   const stepKey = STEPS[step] ?? 'name'
 
-  // Signed in + already onboarded → app. Else skip auth UI to profile steps (with server data).
+  // Resume wizard: skip auth when signed in; skip name/income when already saved; finish without goal screen when both exist.
   useLayoutEffect(() => {
-    if (!SUPABASE_ENABLED || bootLoading || !userId) return
-    if (STEPS[0] !== 'auth') return
-    const p = useStore.getState().profile
-    if (p?.onboarded) {
-      navigate('/log', { replace: true })
-      return
-    }
-    setStep(s => (s === 0 ? 1 : s))
-    if (p && (p.name || p.monthly_income != null)) {
-      setForm(f => ({
-        name: p.name || f.name || '',
-        monthly_income: p.monthly_income != null ? String(p.monthly_income) : f.monthly_income,
-        savings_goal: p.savings_goal != null ? String(p.savings_goal) : f.savings_goal,
-      }))
-    }
+    if (bootLoading) return
+    if (SUPABASE_ENABLED && !userId) return
+    runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS })
   }, [bootLoading, userId, STEPS, navigate])
 
   function setFormKey(key, val) {
@@ -116,21 +161,7 @@ export default function Onboarding() {
         }
       }
       await useStore.getState().init()
-      const p = useStore.getState().profile
-      if (p?.onboarded) {
-        navigate('/log', { replace: true })
-        setCred({ email: '', password: '', confirm: '' })
-        return
-      }
-      setStep(1)
-      if (p && (p.name || p.monthly_income != null)) {
-        setForm(f => ({
-          name: p.name || f.name || '',
-          monthly_income: p.monthly_income != null ? String(p.monthly_income) : f.monthly_income,
-          savings_goal: p.savings_goal != null ? String(p.savings_goal) : f.savings_goal,
-        }))
-      }
-      setCred({ email: '', password: '', confirm: '' })
+      runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS })
     } catch (err) {
       setAuthMsgKind('error')
       setAuthMsg(err?.message || 'Something went wrong.')
