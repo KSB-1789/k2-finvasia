@@ -14,6 +14,40 @@ const LS = {
   del: (k)    => { try { localStorage.removeItem(`k2:${k}`) } catch {} },
 }
 
+/** Coerce Supabase / LS shapes so onboarded + numbers match what the UI expects. */
+export function normalizeProfileRow(row, uid) {
+  if (!row) return null
+  const ob = row.onboarded
+  const onboarded =
+    ob === true ||
+    ob === 1 ||
+    (typeof ob === 'string' && ['true', 't', '1', 'yes'].includes(ob.toLowerCase()))
+  const inc = row.monthly_income
+  const monthly_income =
+    inc != null && inc !== '' && !Number.isNaN(Number(inc)) ? Number(inc) : null
+  const sg = row.savings_goal
+  const savings_goal =
+    sg != null && sg !== '' && !Number.isNaN(Number(sg)) ? Number(sg) : null
+
+  return {
+    ...row,
+    user_id: row.user_id || uid,
+    name: row.name ?? null,
+    monthly_income,
+    savings_goal,
+    onboarded: Boolean(onboarded),
+    badges: Array.isArray(row.badges) ? row.badges : [],
+    streak: Number(row.streak) || 0,
+    last_log_date: row.last_log_date ?? null,
+    is_demo: Boolean(row.is_demo),
+    updated_at: row.updated_at,
+  }
+}
+
+export function isProfileOnboarded(p) {
+  return p?.onboarded === true
+}
+
 // ── Score computation (pure function, no side effects) ─────────────────────
 export function computeScore({ expenses, profile }) {
   if (!expenses.length || !profile?.monthly_income) return null
@@ -103,7 +137,8 @@ export const useStore = create(
         }
         await get()._pullFromSupabase(uid)
       } else {
-        const profile  = LS.get(`${uid}:profile`)
+        const profileRaw = LS.get(`${uid}:profile`)
+        const profile = normalizeProfileRow(profileRaw, uid)
         const expenses = LS.get(`${uid}:expenses`, [])
         const nudges   = LS.get(`${uid}:nudges`, [])
         set(s => {
@@ -149,21 +184,36 @@ export const useStore = create(
         })
         return
       }
-      const [{ data: profileData }, { data: expenseData }, { data: nudgeData }] = await Promise.all([
+      const [
+        { data: profileData, error: profileError },
+        { data: expenseData },
+        { data: nudgeData },
+      ] = await Promise.all([
         supabase.from('profile').select('*').eq('user_id', uid).maybeSingle(),
         supabase.from('expenses').select('*').eq('user_id', uid).order('date', { ascending: false }).limit(500),
         supabase.from('nudges').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(30),
       ])
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('[k2] profile select:', profileError.message)
+      }
+
+      // Server row missing (new user or lag): reuse same-device LS cache so resume logic still works.
+      const lsProfile = LS.get(`${uid}:profile`)
+      const rawProfile =
+        profileData ??
+        (lsProfile && (lsProfile.user_id === uid || !lsProfile.user_id) ? { ...lsProfile, user_id: uid } : null)
+
+      const profile = normalizeProfileRow(rawProfile, uid)
+
       set(s => {
-        s.profile  = profileData  || null
-        s.expenses = expenseData  || []
-        s.nudges   = nudgeData    || []
-        s.loading  = false
+        s.profile = profile
+        s.expenses = expenseData || []
+        s.nudges = nudgeData || []
+        s.loading = false
       })
-      // mirror to LS for offline
-      LS.set(`${uid}:profile`,  profileData)
+      LS.set(`${uid}:profile`, profile)
       LS.set(`${uid}:expenses`, expenseData || [])
-      LS.set(`${uid}:nudges`,   nudgeData   || [])
+      LS.set(`${uid}:nudges`, nudgeData || [])
     },
 
     // ── Profile ────────────────────────────────────────────────────────────
@@ -172,15 +222,31 @@ export const useStore = create(
       if (!uid) throw new Error('Not signed in')
 
       const merged = { ...(get().profile || {}), ...updates, user_id: uid, updated_at: new Date().toISOString() }
-      set(s => { s.profile = merged })
-      LS.set(`${uid}:profile`, merged)
+      const normalized = normalizeProfileRow(merged, uid)
+      set(s => { s.profile = normalized })
+      LS.set(`${uid}:profile`, normalized)
 
       if (SUPABASE_ENABLED && supabase) {
         const PROFILE_KEYS = ['user_id', 'name', 'monthly_income', 'savings_goal', 'onboarded', 'badges', 'streak', 'last_log_date', 'updated_at', 'is_demo']
         const row = Object.fromEntries(
-          PROFILE_KEYS.filter(k => merged[k] !== undefined).map(k => [k, merged[k]])
+          PROFILE_KEYS.filter(k => normalized[k] !== undefined).map(k => [k, normalized[k]])
         )
-        await supabase.from('profile').upsert(row, { onConflict: 'user_id' })
+        const { error: upErr } = await supabase.from('profile').upsert(row, { onConflict: 'user_id' })
+        if (upErr) {
+          console.error('[k2] profile upsert:', upErr.message)
+          throw upErr
+        }
+        const { data: fresh, error: pullErr } = await supabase
+          .from('profile')
+          .select('*')
+          .eq('user_id', uid)
+          .maybeSingle()
+        if (pullErr) console.error('[k2] profile re-fetch:', pullErr.message)
+        if (fresh) {
+          const again = normalizeProfileRow(fresh, uid)
+          set(s => { s.profile = again })
+          LS.set(`${uid}:profile`, again)
+        }
       }
     },
 

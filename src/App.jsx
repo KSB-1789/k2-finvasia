@@ -3,7 +3,8 @@ import { useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useStore } from './store'
 import { shallow } from 'zustand/shallow'
-import { SUPABASE_ENABLED } from './lib/supabase'
+import { SUPABASE_ENABLED, supabase } from './lib/supabase'
+import { isProfileOnboarded } from './store'
 import Shell from './components/layout/Shell'
 import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
@@ -21,7 +22,7 @@ function RequireOnboarding({ children }) {
 
   if (loading) return <AppLoader />
   if (SUPABASE_ENABLED && !userId) return <Navigate to="/onboarding" state={{ from: location }} replace />
-  if (!profile?.onboarded) return <Navigate to="/onboarding" state={{ from: location }} replace />
+  if (!isProfileOnboarded(profile)) return <Navigate to="/onboarding" state={{ from: location }} replace />
   return children
 }
 
@@ -72,7 +73,16 @@ export default function App() {
   // Boot: resolve userId, pull data
   useEffect(() => { init() }, [])
 
-  console.log('App rendering')
+  // After sign-in the session is ready before our store ran init; refresh so profile/expenses load.
+  useEffect(() => {
+    if (!SUPABASE_ENABLED || !supabase) return
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        void useStore.getState().init()
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   return (
     <BrowserRouter>

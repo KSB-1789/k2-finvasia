@@ -5,7 +5,7 @@
 import { useState, useCallback, useLayoutEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useStore, seedDemoData } from '../store'
+import { useStore, seedDemoData, isProfileOnboarded } from '../store'
 import { shallow } from 'zustand/shallow'
 import { supabase, SUPABASE_ENABLED } from '../lib/supabase'
 import { Button, Input } from '../components/ui/index.jsx'
@@ -55,13 +55,13 @@ function hydrateFormFromProfile(p, setForm) {
 function runResumeFromStore({ navigate, setStep, setForm, setCred, STEPS }) {
   const p = useStore.getState().profile
 
-  if (p?.onboarded) {
+  if (isProfileOnboarded(p)) {
     navigate('/log', { replace: true })
     setCred({ email: '', password: '', confirm: '' })
     return
   }
 
-  if (profileHasName(p) && profileHasIncome(p) && !p?.onboarded) {
+  if (profileHasName(p) && profileHasIncome(p) && !isProfileOnboarded(p)) {
     void useStore.getState()
       .saveProfile({
         onboarded: true,
