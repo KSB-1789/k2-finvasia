@@ -125,7 +125,7 @@ npm run dev   # http://localhost:5173
 
 1. In **Supabase Dashboard → Authentication → Providers**, enable **Email**.
 2. For local development, under **Authentication → Providers → Email**, you can turn **off** “Confirm email” so sign-up logs you in immediately. For production, leave confirmation on and use the email link before signing in.
-3. The app **does not** use anonymous sign-in anymore: **email + password** are collected as **step 1 of onboarding** (then name, income, goal). The `/login` URL only redirects to `/onboarding`.
+3. The app **does not** use anonymous sign-in anymore: **Sign in / Sign up** (email + password) is **step 1 of onboarding** for new users. **Returning users** who already finished onboarding go straight to the app after sign-in — data loads from Supabase; name/income/goal are not asked again. The `/login` URL redirects to `/onboarding`.
 
 ### Database
 

@@ -24,6 +24,7 @@ export default function Onboarding() {
   const navigate = useNavigate()
   const saveProfile = useStore(useCallback(s => s.saveProfile, []), shallow)
   const userId = useStore(s => s.userId, shallow)
+  const profile = useStore(s => s.profile, shallow)
   const bootLoading = useStore(s => s.loading, shallow)
   const authEmail = useStore(s => s.authEmail, shallow)
 
@@ -43,12 +44,24 @@ export default function Onboarding() {
 
   const stepKey = STEPS[step] ?? 'name'
 
-  // Already signed in (e.g. refresh): skip account step before paint
+  // Signed in + already onboarded → app. Else skip auth UI to profile steps (with server data).
   useLayoutEffect(() => {
     if (!SUPABASE_ENABLED || bootLoading || !userId) return
     if (STEPS[0] !== 'auth') return
+    const p = useStore.getState().profile
+    if (p?.onboarded) {
+      navigate('/log', { replace: true })
+      return
+    }
     setStep(s => (s === 0 ? 1 : s))
-  }, [bootLoading, userId, STEPS])
+    if (p && (p.name || p.monthly_income != null)) {
+      setForm(f => ({
+        name: p.name || f.name || '',
+        monthly_income: p.monthly_income != null ? String(p.monthly_income) : f.monthly_income,
+        savings_goal: p.savings_goal != null ? String(p.savings_goal) : f.savings_goal,
+      }))
+    }
+  }, [bootLoading, userId, STEPS, navigate])
 
   function setFormKey(key, val) {
     setForm(p => ({ ...p, [key]: val }))
@@ -103,7 +116,20 @@ export default function Onboarding() {
         }
       }
       await useStore.getState().init()
+      const p = useStore.getState().profile
+      if (p?.onboarded) {
+        navigate('/log', { replace: true })
+        setCred({ email: '', password: '', confirm: '' })
+        return
+      }
       setStep(1)
+      if (p && (p.name || p.monthly_income != null)) {
+        setForm(f => ({
+          name: p.name || f.name || '',
+          monthly_income: p.monthly_income != null ? String(p.monthly_income) : f.monthly_income,
+          savings_goal: p.savings_goal != null ? String(p.savings_goal) : f.savings_goal,
+        }))
+      }
       setCred({ email: '', password: '', confirm: '' })
     } catch (err) {
       setAuthMsgKind('error')
@@ -167,6 +193,8 @@ export default function Onboarding() {
   }
 
   const isLast = step === STEPS.length - 1
+  const displayName = (form.name || profile?.name || '').trim() || 'there'
+
   const primaryLabel =
     stepKey === 'auth'
       ? (authMode === 'signin' ? 'Sign in' : 'Create account')
@@ -221,10 +249,38 @@ export default function Onboarding() {
           >
             {stepKey === 'auth' && (
               <div className="space-y-5">
+                <div className="flex rounded-xl border border-[#23232F] p-1 bg-[#131318] gap-1">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('signin'); setAuthMsg(null) }}
+                    className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors ${
+                      authMode === 'signin'
+                        ? 'bg-[#052e16] text-[#22C55E] border border-[#16A34A]/30'
+                        : 'text-[#8888A0] hover:text-[#F0F0F5]'
+                    }`}
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('signup'); setAuthMsg(null) }}
+                    className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors ${
+                      authMode === 'signup'
+                        ? 'bg-[#052e16] text-[#22C55E] border border-[#16A34A]/30'
+                        : 'text-[#8888A0] hover:text-[#F0F0F5]'
+                    }`}
+                  >
+                    Sign up
+                  </button>
+                </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-[#F0F0F5] mb-1">Create your account</h1>
+                  <h1 className="text-2xl font-bold text-[#F0F0F5] mb-1">
+                    {authMode === 'signin' ? 'Welcome back' : 'Create your account'}
+                  </h1>
                   <p className="text-[#8888A0] text-sm">
-                    Email and password sync your data to Supabase with row-level security. This is step 1 of {STEPS.length}.
+                    {authMode === 'signin'
+                      ? 'Sign in with your email and password. Your expenses and profile load from Supabase automatically.'
+                      : 'New here? Create an account with email and password, then finish the next steps once (name, income, goal).'}
                   </p>
                 </div>
                 <Input
@@ -262,13 +318,6 @@ export default function Onboarding() {
                     {authMsg}
                   </p>
                 )}
-                <button
-                  type="button"
-                  onClick={() => { setAuthMode(m => (m === 'signin' ? 'signup' : 'signin')); setAuthMsg(null) }}
-                  className="text-sm text-[#8888A0] hover:text-[#F0F0F5] transition-colors"
-                >
-                  {authMode === 'signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
-                </button>
               </div>
             )}
 
@@ -301,7 +350,7 @@ export default function Onboarding() {
               <div className="space-y-6">
                 <div>
                   <h1 className="text-2xl font-bold text-[#F0F0F5] mb-1">
-                    What's your monthly income, {form.name}?
+                    What's your monthly income, {displayName}?
                   </h1>
                   <p className="text-[#8888A0] text-sm">
                     This is the foundation of your financial score. It never leaves your device without your permission.
