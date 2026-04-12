@@ -80,9 +80,10 @@ export default function App() {
   // After sign-in the session is ready before our store ran init; refresh so profile/expenses load.
   useEffect(() => {
     if (!SUPABASE_ENABLED || !supabase) return
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        void useStore.getState().init()
+        // Pass session so init() never races getSession() and briefly clears profile as "signed out".
+        void useStore.getState().init(session ? { session } : {})
       }
     })
     return () => subscription.unsubscribe()

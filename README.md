@@ -176,6 +176,16 @@ create policy "own rows" on profile   for all using (auth.uid() = user_id);
 create policy "own rows" on nudges    for all using (auth.uid() = user_id);
 ```
 
+If **profile inserts or upserts fail** silently in the dashboard (row never appears), PostgreSQL RLS often needs an explicit **`WITH CHECK`** on `INSERT`. Replace the single `profile` policy with separate statements, for example:
+
+```sql
+drop policy if exists "own rows" on profile;
+create policy "profile_select" on profile for select using (auth.uid() = user_id);
+create policy "profile_insert" on profile for insert with check (auth.uid() = user_id);
+create policy "profile_update" on profile for update using (auth.uid() = user_id);
+create policy "profile_delete" on profile for delete using (auth.uid() = user_id);
+```
+
 Edits to expenses use `UPDATE` on `expenses` where `id` matches and `user_id = auth.uid()`. The `FOR ALL` policies above already allow `UPDATE` for the row owner. If you created narrower policies earlier, add or replace with the statements above so updates are not blocked.
 
 ---

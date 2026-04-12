@@ -152,6 +152,11 @@ export const useStore = create(
         uid = passedSession.user.id
       } else {
         uid = await ensureUserId()
+        // Rare race: listener fires before getSession() persists; retry once.
+        if (SUPABASE_ENABLED && supabase && !uid) {
+          await new Promise(r => setTimeout(r, 60))
+          uid = await ensureUserId()
+        }
       }
 
       const emailFromPass = passedSession?.user?.email ?? null
@@ -261,16 +266,31 @@ export const useStore = create(
       const uid = get().userId
       if (!uid) throw new Error('Not signed in')
 
-      const merged = { ...(get().profile || {}), ...updates, user_id: uid, updated_at: new Date().toISOString() }
+      const patch = Object.fromEntries(
+        Object.entries(updates).filter(([, v]) => v !== undefined)
+      )
+      const patchKeys = new Set(Object.keys(patch))
+
+      const merged = {
+        ...(get().profile || {}),
+        ...patch,
+        user_id: uid,
+        updated_at: new Date().toISOString(),
+      }
       const normalized = normalizeProfileRow(merged, uid)
       set(s => { s.profile = normalized })
       LS.set(`${uid}:profile`, normalized)
 
       if (SUPABASE_ENABLED && supabase) {
-        const PROFILE_KEYS = ['user_id', 'name', 'monthly_income', 'savings_goal', 'onboarded', 'badges', 'streak', 'last_log_date', 'updated_at', 'is_demo']
-        const row = Object.fromEntries(
-          PROFILE_KEYS.filter(k => normalized[k] !== undefined).map(k => [k, normalized[k]])
-        )
+        // Only send non-null columns unless this save explicitly patches that key.
+        // Sending name/monthly_income/savings_goal as null used to wipe the row on partial updates (badges, streak).
+        const PROFILE_ATTRS = ['name', 'monthly_income', 'savings_goal', 'onboarded', 'badges', 'streak', 'last_log_date', 'is_demo']
+        const row = { user_id: uid, updated_at: merged.updated_at }
+        for (const k of PROFILE_ATTRS) {
+          const v = normalized[k]
+          if (patchKeys.has(k)) row[k] = v
+          else if (v !== null && v !== undefined) row[k] = v
+        }
         const { error: upErr } = await supabase.from('profile').upsert(row, { onConflict: 'user_id' })
         if (upErr) {
           console.error('[k2] profile upsert:', upErr.message)
