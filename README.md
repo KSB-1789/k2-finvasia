@@ -1,196 +1,135 @@
-# K2 Wealth v2 — Financial Empowerment for Gen-Z
+# K2 Wealth — Financial Empowerment for Gen-Z
 
 > **Team K2 · Finvasia Hackathon 2026 · Chitkara University**  
 > PS2 — Cashback Dependency · Track 1: Payments & Digital Banking
 
----
-
-## What changed in v2
-
-v1 was a demo with static fake data baked into the UI. v2 is an actual product:
-
-- **Real onboarding** — income captured first, nothing works without it
-- **Per-user data isolation** — Supabase email/password sessions or localStorage UUID; never shared
-- **Zero fake defaults** — empty states everywhere, score only shows when real data exists
-- **Score derived from real spending** — formula uses actual income + category ratios
-- **AI nudges are context-injected** — Gemini receives your actual numbers; no generic advice
-- **Responsive layout** — desktop sidebar + mobile bottom nav, properly designed
-- **Demo mode done right** — seeds realistic data attributed to your userId, fully editable
+**Live app:** [Open K2 Wealth](https://k2finances.netlify.app)
 
 ---
 
-## Features
+## What this project is
 
-| Screen | Core purpose |
-|--------|-------------|
-| **Onboarding** | Capture name, income, savings goal. Demo mode available. |
-| **Log** | Tap category → type amount → done. Optional **Load sample expenses** (always when Supabase is on; also when the list is empty locally). |
-| **Dashboard** | Month summary, pie chart, AI nudges, score preview. Empty-state guarded. |
-| **Growth** | SIP vs FD vs cashback chart. Slider max auto-set from your cashback estimate. |
-| **Score** | Financial score 0–100, level journey, badges, profile settings. |
+K2 Wealth is a small **personal finance web app** aimed at Gen-Z: you set who you are (name, monthly income, savings goal), log spending by category, and see month summaries, a simple **financial score**, **AI-style nudges** (Gemini when an API key is set, otherwise rule-based text), and a **Growth** view that compares monthly SIP and FD assumptions against a flat cashback baseline.
+
+Nothing is “filled in for you” with fake numbers. Empty states explain what is missing (for example, no income yet, or no expenses this month). A **demo path** can seed realistic sample expenses so judges or teammates can explore the UI without manual data entry.
+
+The hackathon angle is **cashback dependency**: the product encourages awareness of spending patterns and tradeoffs between saving, spending, and default cashback behavior.
 
 ---
 
-## Recent Updates
+## Preview
 
-### Edit and Delete Functionality for Expenses
+### Growth Comparison (SIP vs Cashback)
+*Shows how consistent investing outperforms flat cashback*
 
-Perfect! I've successfully added edit and delete functionality for logged expenses. Here's what I implemented:
+![Growth](./screenshots/growth.png)
 
-#### New Features Added:
-1. **Edit Expenses**
-   - Added an "Edit" button next to each expense in the recent list
-   - Clicking "Edit" pre-fills the logging form with the expense's current details
-   - The form shows "Update" instead of "Log" when editing
-   - Added a "Cancel" button to exit edit mode
-   - Updates are saved to both localStorage and Supabase (if enabled)
+### Dashboard Overview
+*Real-time financial insights and spending breakdown*
 
-2. **Delete Expenses**
-   - The existing delete functionality is preserved with confirmation
-   - Clicking "Del" shows confirmation buttons ("Del" and "No")
+![Dashboard](./screenshots/dashboard.png)
 
-3. **Store Updates**
-   - Added `updateExpense` function to the Zustand store
-   - Handles both localStorage and Supabase updates
-   - Maintains data consistency across storage methods
+### Financial Score System
+*Tracks user financial health and progress*
 
-4. **UI Improvements**
-   - Edit and Delete buttons are always visible (removed hover-only behavior for better UX)
-   - Clear visual distinction between Edit (green) and Delete (red) actions
-   - Form adapts to show editing state with appropriate buttons
+![Score](./screenshots/score.png)
 
-#### How to Use:
-- **Edit**: Click the green "Edit" button on any expense → modify details → click "Update"
-- **Delete**: Click the red "Del" button → confirm with "Del" or cancel with "No"
+## How data and accounts work
 
-The build completed successfully, so all functionality should work properly. You can now fully manage your expense history!
+The app keeps a **single client-side store** (`src/store/index.js`, Zustand + Immer) that holds the signed-in user id, profile, expenses, and nudges.
 
-### Growth Page Enhancements
+You can run it in two modes:
 
-New features in the Growth/Investment Calculator:
+- **With Supabase** (`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`): users sign in with **email and password**. Profile and rows in `profile`, `expenses`, and `nudges` are scoped by `user_id` and protected with **row-level security** in Postgres. The same data is **mirrored in `localStorage`** under keys prefixed with `k2:` so the UI can recover quickly and survive flaky reads.
+- **Without Supabase**: the app generates a **stable local UUID** and stores everything in `localStorage` only. Useful for offline demos or when you do not want to run a backend.
 
-1. **Custom Amount Input**
-   - Type any custom investment amount instead of just using the slider
-   - Slider goes up to ₹50K by default (8× your estimated cashback)
-   - Custom input has no upper limit
-
-2. **Multi-Graph Comparison**
-   - Click **SIP** or **FD** to switch the chart (each vs flat cashback baseline)
-   - Flat cashback is shown as the baseline line only (not a separate chart mode)
-   - Graph updates in real-time based on selected type
-
-3. **Fixed Sidebar Layout**
-   - Desktop sidebar is `position: fixed` with main content `padding-left` so it stays visible while you scroll
-   - Mobile still uses the bottom nav only (no sidebar)
+In both modes, **your data is not mixed with anyone else’s**; there is no shared demo pool tied to a global user.
 
 ---
 
-## Setup
+## What you see in the product
 
-### 1. Clone & install
-```bash
-git clone <repo>
-cd k2-wealth
-npm install
-```
+| Area | What it is for |
+|------|----------------|
+| **Onboarding** | Collects name, income, and savings goal. With Supabase, the first step is account creation or sign-in; new accounts still walk through the profile steps until complete. |
+| **Log** | Quick logging: pick a category, enter an amount, save. You can load **sample expenses** when the list is empty (or when using cloud sync) to populate charts. Rows support **edit** (pre-fills the form, then **Update**) and **delete** with confirmation. |
+| **Dashboard** | This month at a glance: totals, category pie, recent nudges, and a score preview when the data supports it. |
+| **Growth** | Investment-style projections: **SIP** vs **FD** vs **flat cashback**, with a slider and optional typed monthly amount. |
+| **Score** | A 1–100 score, short insights, badges, and a small panel to adjust income and savings goal. |
 
-### 2. Configure
-
-Create a `.env` file in the project root (see variables below). You can copy the template with:
-
-```bash
-cp .env.example .env
-```
-
-Fill in `.env`:
-```env
-VITE_GEMINI_API_KEY=     # https://aistudio.google.com/app/apikey (free)
-VITE_SUPABASE_URL=       # optional
-VITE_SUPABASE_ANON_KEY=  # optional
-```
-
-> App works fully without Supabase — localStorage mode is the fallback.  
-> App works without Gemini — fallback nudges use your real numbers, just without LLM phrasing.
-
-### 3. Run
-```bash
-npm run dev   # http://localhost:5173
-```
+The main shell uses a **fixed sidebar on desktop** and a **bottom navigation bar on mobile** so navigation stays visible while scrolling.
 
 ---
 
-## Supabase setup (optional but recommended for demos)
+## Tech stack
 
-### Auth (required when using cloud sync)
-
-1. In **Supabase Dashboard → Authentication → Providers**, enable **Email**.
-2. For local development, under **Authentication → Providers → Email**, you can turn **off** “Confirm email” so sign-up logs you in immediately. For production, leave confirmation on and use the email link before signing in.
-3. The app **does not** use anonymous sign-in anymore: **Sign in / Sign up** (email + password) is **step 1 of onboarding** when Supabase is on. **Sign in** skips the wizard gate; **sign up** (first session) still runs name → income → goal until you finish.
-
-### Database
-
-Use the **canonical reset script** (drops `profile`, `expenses`, `nudges`, recreates them, and applies RLS with proper **`WITH CHECK`** on inserts — the old one-line `FOR ALL USING (...)` policies are a common reason profile rows never insert or upserts misbehave):
-
-- Run the full file in **Supabase → SQL → New query**:  
-  [`supabase/schema-reset.sql`](supabase/schema-reset.sql)
-
-That script wipes **all** app table data (not `auth.users`). After a reset, sign in again and save name / income / goal once.
-
-If you prefer a minimal **upgrade** on an existing project (no table drop), at least replace combined policies with per-command policies so `INSERT` has `WITH CHECK`, matching the same file.
+- **React 18** with **Vite** for build and dev server  
+- **React Router** for client-side routes  
+- **Tailwind CSS** for layout and styling  
+- **Zustand** (+ Immer) for application state  
+- **Supabase JS** for optional auth and Postgres sync  
+- Optional **Gemini** HTTP calls for richer nudge wording  
 
 ---
 
-## Netlify deploy
+## Repository layout
 
-```bash
-# Push to GitHub, then:
-# Netlify → New Site → Import from GitHub
-# Build: npm run build  |  Publish: dist
-# Add env vars in Site Settings → Environment Variables
-```
+At a high level, **`src/App.jsx`** defines routes and an **onboarding gate**: some paths are public (`/onboarding`, `/login`), while the rest render inside **`Shell`**, which wraps the main app chrome (sidebar / bottom nav) and nested routes for Log, Dashboard, Growth, and Score.
 
-`netlify.toml` is already configured for SPA routing.
+**`src/store/index.js`** is the **authoritative place for business rules**: loading the user, reading and writing the profile, listing and mutating expenses, nudges, streaks, and badges. Pages should prefer selectors and actions from the store rather than duplicating finance logic.
 
----
+**`src/lib/`** holds integrations: **`supabase.js`** (client and “who is the user?”), **`gemini.js`** (prompting and fallbacks), **`demoSeed.js`** (structured fake history for demos). **`src/utils/finance.js`** holds shared numeric helpers, categories, and pieces of the scoring story used in more than one screen.
 
-## Architecture
+**`supabase/schema-reset.sql`** is the **reference database script** for Supabase: it drops and recreates the app tables (`profile`, `expenses`, `nudges`) and installs RLS policies that use explicit **`WITH CHECK`** clauses so inserts and updates behave correctly under PostgreSQL. Use it when you want a clean schema that matches what the client expects.
 
 ```
 src/
-├── store/index.js          ← Zustand + Immer. Single truth. Supabase + LS sync.
+├── App.jsx                 # Routes, onboarding guard, auth listener → store init
+├── main.jsx                # React root
+├── index.css               # Global styles / Tailwind entry
+├── store/
+│   └── index.js            # Zustand store: profile, expenses, nudges, Supabase + LS
 ├── lib/
-│   ├── supabase.js         ← Anon auth client. Per-user isolation.
-│   ├── gemini.js           ← Context-injected prompts. Real number injection.
-│   └── demoSeed.js         ← Realistic 30-day dataset for demo mode.
-├── utils/finance.js        ← SIP formula, categories, triggers, badges, score.
+│   ├── supabase.js         # Supabase client; session vs local UUID
+│   ├── gemini.js           # Nudge generation + non-LLM fallbacks
+│   └── demoSeed.js         # Sample expense generator
+├── utils/
+│   └── finance.js          # Categories, triggers, score-related helpers
 ├── components/
-│   ├── ui/index.jsx        ← Button, Card, Input, ScoreRing, Toast, Empty.
-│   └── layout/Shell.jsx    ← Desktop sidebar + mobile bottom nav.
+│   ├── layout/Shell.jsx    # App chrome and outlet for child routes
+│   └── ui/                 # Buttons, cards, inputs, etc.
 └── pages/
-    ├── Login.jsx           ← Email sign-in / sign-up when Supabase is configured.
-    ├── Onboarding.jsx      ← 3-step: name → income → goal. Demo mode button.
-    ├── LogExpense.jsx      ← Category grid → amount → log. Trigger display.
-    ├── Dashboard.jsx       ← Month summary, pie, nudges, score preview.
-    ├── Growth.jsx          ← SIP vs cashback chart. Personalized slider.
-    └── Score.jsx           ← Score ring, insights, level journey, badges.
+    ├── Onboarding.jsx      # Auth + profile wizard (and demo entry)
+    ├── Login.jsx           # Redirect helper for legacy `/login` URL
+    ├── LogExpense.jsx      # Primary logging UI
+    ├── Dashboard.jsx       # Month view, nudges, charts
+    ├── Growth.jsx          # SIP / FD / cashback comparison
+    └── Score.jsx           # Score ring, insights, profile edits
+|
+├── screenshots/
+│ ├── growth.png
+│ ├── dashboard.png
+│ └── score.png
+├── supabase/
+│ └── schema-reset.sql       # Full DDL + RLS reset for Supabase SQL editor
 ```
 
-### Data flow
-```
-User signs in (Supabase) or gets a local UUID
-  → init() loads profile + expenses for that user
-User logs expense
-  → addExpense() in store
-  → mirrored to localStorage immediately
-  → synced to Supabase (if configured)
-  → streak updated
-  → badge check
-  → (async) Gemini nudge generated with real context
-  → nudge saved to store + Supabase
-  → UI re-renders from store (score, breakdown, triggers all reactive)
-```
+---
 
-### Score formula
+## How state moves when you use the app
+
+When the app boots—or when Supabase reports a **signed-in** or **refreshed** session—the store’s **`init`** routine resolves the current user id, then loads **profile**, **expenses**, and **nudges** from Supabase when configured, otherwise from `localStorage`. After that, screens simply read from the store.
+
+Logging an expense runs **`addExpense`**: the list updates immediately, the mirror keys in `localStorage` update, and if Supabase is on, a row is inserted remotely. Related logic may bump **streak** and **badges**, and can enqueue a **nudge** (Gemini or fallback) based on the latest month’s totals.
+
+Profile edits (onboarding, Score settings, or streak maintenance) go through **`saveProfile`**, which merges into the in-memory profile, updates `localStorage`, and upserts the **`profile`** row in Supabase without sending nulls for fields you did not intend to clear—so partial updates do not accidentally erase name or income.
+
+---
+
+## Score and Growth (reference math)
+
+The **score** is a weighted blend of savings rate, “impulsive” category share, logging streak, and whether a savings goal exists, clamped to 1–100:
+
 ```
 base = 40
 + savingsRate × 40       (income - spent) / income
@@ -200,45 +139,87 @@ base = 40
 = clamped [1, 100]
 ```
 
-### Investment formulas (Growth page)
+**Growth** uses three illustrative curves (not investment advice): SIP at **12% annual** with monthly compounding, a simplified **FD at 6.5% annual**, and **flat cashback** with no compounding. The UI documents the exact formulas inline; at a glance:
 
-**SIP (Systematic Investment Plan) @ 12% annual**
 ```
-FV = P × [(1.01^n − 1) / 0.01] × 1.01
-   where P = monthly amount, n = months, 1% = monthly rate (12% annual)
-   monthly compounding with end-of-period payments
-```
-
-**FD (Fixed Deposit) @ 6.5% annual**
-```
-FV = P × 12 × years × (1 + (0.065/12) × (years×12/2))
-   where P = monthly amount
-   simplified average rate model for month-by-month deposits
-```
-
-**Cashback (Flat)**
-```
-FV = P × 12 × years
-   no compounding, direct accumulation
+SIP:   FV = P × [(1.01^n − 1) / 0.01] × 1.01   (P monthly, n months, 1% / month)
+FD:    FV ≈ P × 12 × years × (1 + (0.065/12) × (years×12/2))   (simplified model)
+Cash:  FV = P × 12 × years
 ```
 
 ---
 
-## Team split (2 people)
+## Local development (clone, database SQL, env, run)
 
-**Person A — Data & Logic**
-- `src/store/index.js`
-- `src/lib/supabase.js`
-- `src/lib/gemini.js`
-- `src/utils/finance.js`
-- `src/lib/demoSeed.js`
+Use this order the first time you set up the project.
 
-**Person B — UI & Pages**
-- `src/components/ui/index.jsx`
-- `src/components/layout/Shell.jsx`
-- `src/pages/` (all 5 pages)
-- `src/index.css`
-- `tailwind.config.js`
+### 1. Clone the repository and install dependencies
+
+```bash
+git clone <repo-url>
+cd k2-wealth
+npm install
+```
+
+The folder name may match your Git remote (for example `k2-finvasia`); `cd` into whatever directory `git clone` created.
+
+### 2. (Optional) Create tables and policies in Supabase
+
+Skip this block if you are running **localStorage-only** mode without Supabase.
+
+1. In [Supabase](https://supabase.com), create a project (or open an existing one). Under **Project Settings → API**, copy the **Project URL** and the **anon public** key for step 4.
+2. In the Supabase dashboard, open **SQL Editor**, click **New query**.
+3. On your machine, open the cloned repo file **`supabase/schema-reset.sql`** in any editor, select **all** of its contents, copy them, paste into the Supabase SQL editor, and click **Run**.
+
+That script runs inside a transaction: it drops the app tables `profile`, `expenses`, and `nudges` (if they exist), recreates them, and attaches row-level security policies with proper **`WITH CHECK`** rules so inserts and updates work as Postgres expects. It **does not** delete users from `auth.users`. Because it wipes app data, only use it on a dev project or when you intentionally want a clean slate.
+
+4. Still in Supabase, go to **Authentication → Providers**, enable **Email**, and for local testing consider turning **off** “Confirm email” so sign-up returns a session immediately.
+
+### 3. Environment variables
+
+Create **`.env`** in the project root (next to `package.json`). If the repo ships **`.env.example`**, you can start from it:
+
+```bash
+cp .env.example .env
+```
+
+Fill in at least the Supabase variables if you completed step 2:
+
+```env
+VITE_SUPABASE_URL=         # Project URL from Supabase
+VITE_SUPABASE_ANON_KEY=    # anon public key from Supabase
+VITE_GEMINI_API_KEY=       # optional; Google AI Studio for richer nudges
+```
+
+### 4. Start the dev server
+
+```bash
+npm run dev
+```
+
+The app is served at **http://localhost:5173** by default.
+
+Without Supabase, the app uses **local persistence** only and still runs end-to-end. Without Gemini, nudges use **deterministic** copy derived from your numbers.
+
+---
+
+## Supabase notes (existing projects)
+
+If you already have tables from an older version of this README, compare your **RLS policies** to **`supabase/schema-reset.sql`**. A single policy like **`FOR ALL USING (auth.uid() = user_id)`** without an explicit **`WITH CHECK`** on insert/update is a common reason profile rows fail to save. The reset script uses separate **select / insert / update / delete** policies so behavior matches PostgreSQL’s rules.
+
+For production, keep **email confirmation** enabled if you rely on verified addresses.
+
+---
+
+## Deploying to Netlify
+
+Connect the Git repository in Netlify, set the build command to **`npm run build`**, publish the **`dist`** directory, and add the same **`VITE_*`** variables in the site’s environment settings. **`netlify.toml`** in this repo already configures SPA redirects so client-side routing works on refresh.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 ---
 
