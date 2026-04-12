@@ -1,14 +1,11 @@
-# K2 Wealth v2 — Financial Empowerment for Gen-Z
+# K2 Wealth — Financial Empowerment for Gen-Z
 
 > **Team K2 · Finvasia Hackathon 2026 · Chitkara University**  
 > PS2 — Cashback Dependency · Track 1: Payments & Digital Banking
 
 ---
 
-## What changed in v2
-
-v1 was a demo with static fake data baked into the UI. v2 is an actual product:
-
+## Summary
 - **Real onboarding** — income captured first, nothing works without it
 - **Per-user data isolation** — Supabase email/password sessions or localStorage UUID; never shared
 - **Zero fake defaults** — empty states everywhere, score only shows when real data exists
@@ -35,9 +32,8 @@ v1 was a demo with static fake data baked into the UI. v2 is an actual product:
 
 ### Edit and Delete Functionality for Expenses
 
-Perfect! I've successfully added edit and delete functionality for logged expenses. Here's what I implemented:
 
-#### New Features Added:
+#### Features:
 1. **Edit Expenses**
    - Added an "Edit" button next to each expense in the recent list
    - Clicking "Edit" pre-fills the logging form with the expense's current details
@@ -63,11 +59,8 @@ Perfect! I've successfully added edit and delete functionality for logged expens
 - **Edit**: Click the green "Edit" button on any expense → modify details → click "Update"
 - **Delete**: Click the red "Del" button → confirm with "Del" or cancel with "No"
 
-The build completed successfully, so all functionality should work properly. You can now fully manage your expense history!
 
-### Growth Page Enhancements
-
-New features in the Growth/Investment Calculator:
+### Growth Page
 
 1. **Custom Amount Input**
    - Type any custom investment amount instead of just using the slider
