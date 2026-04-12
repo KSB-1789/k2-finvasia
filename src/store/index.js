@@ -231,34 +231,40 @@ export const useStore = create(
       }
       const [
         { data: profileData, error: profileError },
-        { data: expenseData },
-        { data: nudgeData },
+        { data: expenseData, error: expenseError },
+        { data: nudgeData, error: nudgeError },
       ] = await Promise.all([
         supabase.from('profile').select('*').eq('user_id', uid).maybeSingle(),
         supabase.from('expenses').select('*').eq('user_id', uid).order('date', { ascending: false }).limit(500),
         supabase.from('nudges').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(30),
       ])
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('[k2] profile select:', profileError.message)
+      if (profileError) {
+        console.error('[k2] profile select:', profileError.code || '', profileError.message)
       }
+      if (expenseError) console.error('[k2] expenses select:', expenseError.message)
+      if (nudgeError) console.error('[k2] nudges select:', nudgeError.message)
 
-      // Server row missing (new user or lag): reuse same-device LS cache so resume logic still works.
+      // On select errors, ignore empty server payload and fall back to LS so a flaky read does not wipe the client.
+      const serverProfile = profileError ? null : profileData
       const lsProfile = LS.get(`${uid}:profile`)
       const rawProfile =
-        profileData ??
+        serverProfile ??
         (lsProfile && (lsProfile.user_id === uid || !lsProfile.user_id) ? { ...lsProfile, user_id: uid } : null)
 
       const profile = normalizeProfileRow(rawProfile, uid)
 
       set(s => {
         s.profile = profile
-        s.expenses = expenseData || []
-        s.nudges = nudgeData || []
+        s.expenses = expenseError ? LS.get(`${uid}:expenses`, []) : expenseData || []
+        s.nudges = nudgeError ? LS.get(`${uid}:nudges`, []) : nudgeData || []
         s.loading = false
       })
-      LS.set(`${uid}:profile`, profile)
-      LS.set(`${uid}:expenses`, expenseData || [])
-      LS.set(`${uid}:nudges`, nudgeData || [])
+      // Never persist a null profile to LS — that used to overwrite a good cache after a failed/empty read and look like a "reset" on every login.
+      if (profile) {
+        LS.set(`${uid}:profile`, profile)
+      }
+      if (!expenseError) LS.set(`${uid}:expenses`, expenseData || [])
+      if (!nudgeError) LS.set(`${uid}:nudges`, nudgeData || [])
     },
 
     // ── Profile ────────────────────────────────────────────────────────────

@@ -125,68 +125,18 @@ npm run dev   # http://localhost:5173
 
 1. In **Supabase Dashboard → Authentication → Providers**, enable **Email**.
 2. For local development, under **Authentication → Providers → Email**, you can turn **off** “Confirm email” so sign-up logs you in immediately. For production, leave confirmation on and use the email link before signing in.
-3. The app **does not** use anonymous sign-in anymore: **Sign in / Sign up** (email + password) is **step 1 of onboarding** when needed. **Returning users** with `onboarded` set go straight to the app. If you are signed in but never finished the wizard, **only missing steps** are shown (saved name/income are skipped), and **name + income already in the database** finishes onboarding without the savings-goal screen (same as “skip for now” on savings).
+3. The app **does not** use anonymous sign-in anymore: **Sign in / Sign up** (email + password) is **step 1 of onboarding** when Supabase is on. **Sign in** skips the wizard gate; **sign up** (first session) still runs name → income → goal until you finish.
 
 ### Database
 
-Run this SQL in your Supabase project → SQL editor:
+Use the **canonical reset script** (drops `profile`, `expenses`, `nudges`, recreates them, and applies RLS with proper **`WITH CHECK`** on inserts — the old one-line `FOR ALL USING (...)` policies are a common reason profile rows never insert or upserts misbehave):
 
-```sql
-create table if not exists expenses (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
-  amount      numeric(10,2) not null check (amount > 0),
-  category    text not null,
-  note        text,
-  date        date not null default current_date,
-  created_at  timestamptz default now()
-);
+- Run the full file in **Supabase → SQL → New query**:  
+  [`supabase/schema-reset.sql`](supabase/schema-reset.sql)
 
-create table if not exists profile (
-  user_id        uuid primary key references auth.users(id) on delete cascade,
-  name           text,
-  monthly_income numeric(10,2),
-  savings_goal   numeric(10,2),
-  onboarded      boolean default false,
-  is_demo        boolean default false,
-  badges         text[] default '{}',
-  streak         integer default 0,
-  last_log_date  date,
-  updated_at     timestamptz default now()
-);
+That script wipes **all** app table data (not `auth.users`). After a reset, sign in again and save name / income / goal once.
 
--- If you already created `profile` without `is_demo`, run:
--- alter table profile add column if not exists is_demo boolean default false;
-
-create table if not exists nudges (
-  id         uuid primary key default gen_random_uuid(),
-  user_id    uuid not null references auth.users(id) on delete cascade,
-  text       text not null,
-  category   text,
-  rating     text,
-  created_at timestamptz default now()
-);
-
-alter table expenses enable row level security;
-alter table profile   enable row level security;
-alter table nudges    enable row level security;
-
-create policy "own rows" on expenses for all using (auth.uid() = user_id);
-create policy "own rows" on profile   for all using (auth.uid() = user_id);
-create policy "own rows" on nudges    for all using (auth.uid() = user_id);
-```
-
-If **profile inserts or upserts fail** silently in the dashboard (row never appears), PostgreSQL RLS often needs an explicit **`WITH CHECK`** on `INSERT`. Replace the single `profile` policy with separate statements, for example:
-
-```sql
-drop policy if exists "own rows" on profile;
-create policy "profile_select" on profile for select using (auth.uid() = user_id);
-create policy "profile_insert" on profile for insert with check (auth.uid() = user_id);
-create policy "profile_update" on profile for update using (auth.uid() = user_id);
-create policy "profile_delete" on profile for delete using (auth.uid() = user_id);
-```
-
-Edits to expenses use `UPDATE` on `expenses` where `id` matches and `user_id = auth.uid()`. The `FOR ALL` policies above already allow `UPDATE` for the row owner. If you created narrower policies earlier, add or replace with the statements above so updates are not blocked.
+If you prefer a minimal **upgrade** on an existing project (no table drop), at least replace combined policies with per-command policies so `INSERT` has `WITH CHECK`, matching the same file.
 
 ---
 
