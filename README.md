@@ -3,61 +3,80 @@
 > **Team K2 · Finvasia Hackathon 2026 · Chitkara University**  
 > PS2 — Cashback Dependency · Track 1: Payments & Digital Banking
 
-**Live app:** [Open K2 Wealth](https://k2finances.netlify.app)
+---
+
+## live site - http://k2finance.netlify.app
+
+## Summary
+- **Real onboarding** — income captured first, nothing works without it
+- **Per-user data isolation** — Supabase email/password sessions or localStorage UUID; never shared
+- **Zero fake defaults** — empty states everywhere, score only shows when real data exists
+- **Score derived from real spending** — formula uses actual income + category ratios
+- **AI nudges are context-injected** — Gemini receives your actual numbers; no generic advice
+- **Responsive layout** — desktop sidebar + mobile bottom nav, properly designed
+- **Demo mode done right** — seeds realistic data attributed to your userId, fully editable
 
 ---
 
-## What this project is
+## Features
 
-K2 Wealth is a small **personal finance web app** aimed at Gen-Z: you set who you are (name, monthly income, savings goal), log spending by category, and see month summaries, a simple **financial score**, **AI-style nudges** (Gemini when an API key is set, otherwise rule-based text), and a **Growth** view that compares monthly SIP and FD assumptions against a flat cashback baseline.
-
-Nothing is “filled in for you” with fake numbers. Empty states explain what is missing (for example, no income yet, or no expenses this month). A **demo path** can seed realistic sample expenses so judges or teammates can explore the UI without manual data entry.
-
-The hackathon angle is **cashback dependency**: the product encourages awareness of spending patterns and tradeoffs between saving, spending, and default cashback behavior.
-
----
-
-## Preview
-
-### Growth Comparison (SIP vs Cashback)
-*Shows how consistent investing outperforms flat cashback*
-
-![Growth](./screenshots/growth.png)
-
-### Dashboard Overview
-*Real-time financial insights and spending breakdown*
-
-![Dashboard](./screenshots/dashboard.png)
-
-### Financial Score System
-*Tracks user financial health and progress*
-
-![Score](./screenshots/score.png)
-
-## How data and accounts work
-
-The app keeps a **single client-side store** (`src/store/index.js`, Zustand + Immer) that holds the signed-in user id, profile, expenses, and nudges.
-
-You can run it in two modes:
-
-- **With Supabase** (`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`): users sign in with **email and password**. Profile and rows in `profile`, `expenses`, and `nudges` are scoped by `user_id` and protected with **row-level security** in Postgres. The same data is **mirrored in `localStorage`** under keys prefixed with `k2:` so the UI can recover quickly and survive flaky reads.
-- **Without Supabase**: the app generates a **stable local UUID** and stores everything in `localStorage` only. Useful for offline demos or when you do not want to run a backend.
-
-In both modes, **your data is not mixed with anyone else’s**; there is no shared demo pool tied to a global user.
+| Screen | Core purpose |
+|--------|-------------|
+| **Onboarding** | Capture name, income, savings goal. Demo mode available. |
+| **Log** | Tap category → type amount → done. Optional **Load sample expenses** (always when Supabase is on; also when the list is empty locally). |
+| **Dashboard** | Month summary, pie chart, AI nudges, score preview. Empty-state guarded. |
+| **Growth** | SIP vs FD vs cashback chart. Slider max auto-set from your cashback estimate. |
+| **Score** | Financial score 0–100, level journey, badges, profile settings. |
 
 ---
 
-## What you see in the product
+## Recent Updates
 
-| Area | What it is for |
-|------|----------------|
-| **Onboarding** | Collects name, income, and savings goal. With Supabase, the first step is account creation or sign-in; new accounts still walk through the profile steps until complete. |
-| **Log** | Quick logging: pick a category, enter an amount, save. You can load **sample expenses** when the list is empty (or when using cloud sync) to populate charts. Rows support **edit** (pre-fills the form, then **Update**) and **delete** with confirmation. |
-| **Dashboard** | This month at a glance: totals, category pie, recent nudges, and a score preview when the data supports it. |
-| **Growth** | Investment-style projections: **SIP** vs **FD** vs **flat cashback**, with a slider and optional typed monthly amount. |
-| **Score** | A 1–100 score, short insights, badges, and a small panel to adjust income and savings goal. |
+### Edit and Delete Functionality for Expenses
 
-The main shell uses a **fixed sidebar on desktop** and a **bottom navigation bar on mobile** so navigation stays visible while scrolling.
+
+#### Features:
+1. **Edit Expenses**
+   - Added an "Edit" button next to each expense in the recent list
+   - Clicking "Edit" pre-fills the logging form with the expense's current details
+   - The form shows "Update" instead of "Log" when editing
+   - Added a "Cancel" button to exit edit mode
+   - Updates are saved to both localStorage and Supabase (if enabled)
+
+2. **Delete Expenses**
+   - The existing delete functionality is preserved with confirmation
+   - Clicking "Del" shows confirmation buttons ("Del" and "No")
+
+3. **Store Updates**
+   - Added `updateExpense` function to the Zustand store
+   - Handles both localStorage and Supabase updates
+   - Maintains data consistency across storage methods
+
+4. **UI Improvements**
+   - Edit and Delete buttons are always visible (removed hover-only behavior for better UX)
+   - Clear visual distinction between Edit (green) and Delete (red) actions
+   - Form adapts to show editing state with appropriate buttons
+
+#### How to Use:
+- **Edit**: Click the green "Edit" button on any expense → modify details → click "Update"
+- **Delete**: Click the red "Del" button → confirm with "Del" or cancel with "No"
+
+
+### Growth Page
+
+1. **Custom Amount Input**
+   - Type any custom investment amount instead of just using the slider
+   - Slider goes up to ₹50K by default (8× your estimated cashback)
+   - Custom input has no upper limit
+
+2. **Multi-Graph Comparison**
+   - Click **SIP** or **FD** to switch the chart (each vs flat cashback baseline)
+   - Flat cashback is shown as the baseline line only (not a separate chart mode)
+   - Graph updates in real-time based on selected type
+
+3. **Fixed Sidebar Layout**
+   - Desktop sidebar is `position: fixed` with main content `padding-left` so it stays visible while you scroll
+   - Mobile still uses the bottom nav only (no sidebar)
 
 ---
 
