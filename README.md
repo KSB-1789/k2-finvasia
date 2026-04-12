@@ -5,6 +5,8 @@
 
 ---
 
+## live site - http://k2finance.netlify.app
+
 ## Summary
 - **Real onboarding** — income captured first, nothing works without it
 - **Per-user data isolation** — Supabase email/password sessions or localStorage UUID; never shared
