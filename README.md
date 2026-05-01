@@ -223,4 +223,4 @@ This project is licensed under the MIT License.
 
 ---
 
-*Built by Team K2 · Chitkara University, Punjab · Finvasia Innovation Hackathon 2026*
+*Built by Team K2*
